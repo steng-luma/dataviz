@@ -7,8 +7,7 @@ The air above it is barely observed at all. This project is about which instrume
 which ones are switched on, and what happened the last time that gap mattered — Papua New
 Guinea in the 2015–16 El Niño.
 
-**Live app:** https://steng-luma.github.io/dataviz/
-*(Settings → Pages → Source: deploy from branch `main`, folder `/root`.)*
+**Live app:** https://steng-luma.github.io/dataviz/dataviz.html
 
 ---
 
