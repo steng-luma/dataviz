@@ -16,10 +16,8 @@ listed in `.gitignore` — download them into `data/` before knitting the analys
 | File | Source |
 |---|---|
 | `../climate_change.csv` | SPC Pacific Data Hub, dataflow `DF_CLIMATE_CHANGE`. Indicators used: `SST_ANOM`, `ST_ANOM`, `RAIN_ANOM`, `SEA_LVL`, `METEO_MONITOR_NET` |
-| `../oni.csv` | NOAA Climate Prediction Center — Oceanic Niño Index |
 | `../roni.csv` | NOAA Climate Prediction Center — Relative Oceanic Niño Index |
 | `../Combined_Pacific_area.csv` | Land area (SPC `DF_POCKET`) joined to EEZ area (Marine Regions v4) |
-| `../sweet-potato-production.csv` | Our World in Data — sweet potato production |
 | `../png_2015_cat45_llga.csv` | Districts rated 4 or 5 in the 2015–16 PNG drought, transcribed from `../PNG2015droughtPolicyBriefNo11.pdf` |
 | `Land_area.csv` | SPC Pacific Data Hub, dataflow `DF_POCKET`, indicator `LAR` |
 | `ghcnd-stations.txt` | NOAA GHCN-Daily station list |
