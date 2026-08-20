@@ -16,14 +16,10 @@ Guinea in the 2015–16 El Niño.
 
 | Path | What it is |
 |---|---|
-| `index.html` | The finished piece — a single self-contained scrollytelling app. No build step, no dependencies; open it in a browser. |
+| `dataviz.html` | The finished piece — a single self-contained scrollytelling app. No build step, no dependencies; open it in a browser. |
 | `visualisations_hypothesis (final).Rmd` | The analysis behind every number in the app. Knit from the repo root. |
-| `visualisations_hypothesis (improved) 20260817.Rmd` | Previous draft, kept for the revision history in its header notes. |
 | `visualisations_hypothesis_simplified.Rmd` | Shorter variant with the exploratory sections stripped out. |
-| `hypothesis.docx` | Written hypothesis the analysis set out to test. |
-| `PNG2015droughtPolicyBriefNo11.pdf` | Primary source for the PNG 2015 drought district ratings. |
 | `data/` | Inputs, with provenance in `data/README.md`. |
-| `powerbi/` | A parallel build of the same fourteen charts as a five-tab Power BI report. |
 
 ---
 
@@ -55,21 +51,6 @@ climate indicators, NOAA CPC for ENSO, NOAA GHCN-Daily and IGRA for station and 
 inventories, WMO WDQMS for what those stations actually reported in July 2026, and Marine
 Regions for EEZ and land areas.
 
----
-
-## Power BI rebuild
-
-`powerbi/` holds the same story as a five-tab report — Global Warming, The Swing, PNG 2015,
-Three Layers, The Gap. It's a separate artefact, not generated from the R code:
-
-- `pacific-rainfall-model-data.xlsx` — 14 model tables, one per sheet, ready to load in one step
-- `data/` — the same tables as CSVs
-- `deneb/` — five Vega-Lite specs for the charts native Power BI can't draw
-- `images/` — PNG renders of those charts for static use
-- `pbi-layout-preview.html` — all five pages at 1280×720, viewable without Power BI
-- `LOAD-THE-DATA-FIRST.md` — loading steps and troubleshooting
-
----
 
 ## Notes
 
