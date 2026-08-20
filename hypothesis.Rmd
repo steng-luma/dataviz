@@ -16,13 +16,13 @@ library(geosphere)
 
 ```{r spc-indicators}
 # rename the four columns we use, once, so everything below reads plainly
-climate <- read.csv("climate_change.csv") %>%
+climate <- read.csv("data/climate_change.csv") %>%
   rename(country   = Pacific.Island.Countries.and.territories,
          year      = TIME_PERIOD,
          value     = OBS_VALUE,
          indicator = CLIMATE_CHANGE_INDICATORS)
 
-oni <- read.csv("oni.csv") %>% select(year = Year, oni = MEAN)
+oni <- read.csv("data/oni.csv") %>% select(year = Year, oni = MEAN)
 
 sea_temp <- filter(climate, indicator == "SST_ANOM")   # degrees C, 1850-2025
 rain     <- filter(climate, indicator == "RAIN_ANOM")  # mm, 1979-2025
