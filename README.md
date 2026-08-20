@@ -17,8 +17,7 @@ Guinea in the 2015–16 El Niño.
 | Path | What it is |
 |---|---|
 | `dataviz.html` | The finished piece — a single self-contained scrollytelling app. No build step, no dependencies; open it in a browser. |
-| `visualisations_hypothesis (final).Rmd` | The analysis behind every number in the app. Knit from the repo root. |
-| `visualisations_hypothesis_simplified.Rmd` | Shorter variant with the exploratory sections stripped out. |
+| `hypothesis.Rmd` | The analysis behind every number in the app. Knit from the repo root. |
 | `data/` | Inputs, with provenance in `data/README.md`. |
 
 ---
