@@ -1,8 +1,3 @@
-# ---- Large raw sources (re-downloadable; provenance in data/README.md) ----
-data/ghcnd-inventory.txt
-data/Pacific islands region land.geojson
-data/EEZ_land_union_v4_202410/
-
 # ---- Superseded SPC extracts, kept locally only ----
 archive/
 
