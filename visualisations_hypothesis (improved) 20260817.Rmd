@@ -1,0 +1,1069 @@
+---
+title: "dataviz hypothesis"
+output: html_document
+date: "2026-08-07"
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{=html}
+<!--
+REVISION NOTES - this draft folds in the coworker's PDF markup.
+
+Applied:
+  - s2 reframed: says HOW the 175-year record was collected, so the small
+    station count later doesn't contradict it
+  - s3: temperature/rainfall split made explicit; the "eight times" ratio is
+    now computed rather than asserted, with its definition stated in the prose
+  - s4: "four years in five" cut; two named events (1997-98, 2015-16) carry it
+    instead, and the country grouping has a geographic-assignment switch
+  - s5 NEW: what being unprepared cost (PNG, 2015-16)
+  - s8: the "twelve added in thirty-five years" claim no longer asserted
+  - s9 NEW: why a broken station stays broken
+  - s10: close softened, plus the sea-level-not-rainfall point
+
+Open - marked TODO(coworker) inline, all of these need a decision or a number:
+  - the ratio in s3 (define window + dispersion measure)
+  - the SPCZ/ITCZ grouping in s4 (replaces the circular oni correlation)
+  - PNG impact figures in s5
+  - EEZ areas + WMO spacing multiples in s7
+  - whether the growth calc in s8 survives at all
+
+Not in this file, so nothing to change: the "more unpredictable" wording and
+the "90% within 1-2 metres elevation" claim. Both flagged in the PDF but
+neither appears in this draft - check they aren't in another version.
+-->
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(ggrepel)
+library(geosphere)
+```
+
+```{r}
+# rename the four columns we use, once, so everything below reads plainly
+climate <- read.csv("climate_change.csv") %>%
+  rename(country   = Pacific.Island.Countries.and.territories,
+         year      = TIME_PERIOD,
+         value     = OBS_VALUE,
+         indicator = CLIMATE_CHANGE_INDICATORS)
+
+oni <- read.csv("oni.csv") %>% select(year = Year, oni = MEAN)
+
+sea_temp <- filter(climate, indicator == "SST_ANOM")   # degrees C, 1850-2025
+rain     <- filter(climate, indicator == "RAIN_ANOM")  # mm, 1979-2025
+sea_lvl  <- filter(climate, indicator == "SEA_LVL")    # metres, 1993-2023
+stations <- filter(climate, indicator == "METEO_MONITOR_NET")
+
+# one row per country-year, always. this is the check that catches the old bug
+stopifnot(nrow(count(sea_temp, country, year) %>% filter(n > 1)) == 0)
+```
+
+# 1. Start with them
+
+*"When and where were you born?"*
+
+```{r}
+birth_year <- 1990
+place      <- "Nauru"
+
+mine <- filter(sea_temp, country == place)
+then <- mean(mine$value[mine$year >= birth_year & mine$year < birth_year + 10])
+now  <- mean(mine$value[mine$year >= 2016])
+
+round(now - then, 1)
+```
+
+```{r}
+ggplot(mine, aes(year, value)) +
+  geom_line(colour = "#1a3d5c") +
+  labs(title = paste("Since", birth_year, ", seas around ", place, "have warmed"),
+       x = NULL, y = "Sea temperature anomaly (C)") +
+  theme_minimal()
+```
+
+# 2. The 175-year record was not collected on purpose
+
+Ships logged sea temperature on their way to somewhere else, and
+satellites read the surface from orbit. Both cover the Pacific
+incidentally. Neither was set up to watch these islands.
+
+That matters for everything below. A line drawn back to 1850 is not the
+same thing as a country measuring its own weather, and the two numbers
+come apart by section 7.
+
+```{r}
+# average the countries so the shared signal shows through
+yearly <- sea_temp %>% group_by(year) %>% summarise(temp = mean(value))
+
+# a "hinge" is 0 before its year and counts years after it,
+# so adding two of them lets the slope change twice
+hinge <- function(x, b) pmax(0, x - b)
+
+fit <- lm(temp ~ year + hinge(year, 1915) + hinge(year, 1985), yearly)
+
+# the coefficients are changes in slope, so add them up as you go
+round(cumsum(coef(fit)[-1]) * 10, 2)      # degrees C per decade, per era
+```
+
+```{r}
+yearly$fitted <- predict(fit)
+
+ggplot(yearly, aes(year)) +
+  geom_line(aes(y = temp), colour = "grey70") +
+  geom_line(aes(y = fitted), colour = "#1a3d5c", linewidth = 1.2) +
+  geom_vline(xintercept = c(1915, 1985), linetype = "dotted") +
+  labs(title = "The warming tripled in the mid-1980s",
+       x = NULL, y = "Sea temperature anomaly (C)") +
+  theme_minimal()
+```
+
+Sea temperatures are rising alongside sea levels, and every country is
+affected.
+
+```{r}
+warming <- sea_temp %>% filter(year >= 1985) %>% group_by(country) %>%
+  summarise(per_decade = coef(lm(value ~ year))[2] * 10)
+
+rising <- sea_lvl %>% group_by(country) %>%
+  summarise(mm_per_year = coef(lm(value ~ year))[2] * 1000)
+
+c(countries_warming = sum(warming$per_decade > 0), of = nrow(warming),
+  countries_rising  = sum(rising$mm_per_year > 0), of = nrow(rising))
+
+#Sabina: was this meant to be a graph of increase in sea temp and level by country and year?
+```
+
+# 3. Warmer seas make El Nino stronger, and rainfall less predictable
+
+Rainfall is the part people live through, and it does not climb the way
+temperature does. It swings: a year of too much, then a year of nothing.
+
+```{r}
+jump  <- rain %>% group_by(country) %>% summarise(s = sd(value))
+climb <- rain %>% group_by(country) %>% summarise(t = coef(lm(value ~ year))[2] * 10)
+
+round(median(jump$s), 1)      # how far rain moves in a typical year, mm
+round(median(climb$t), 1)     # how far the trend moves in a decade, mm
+```
+
+```{r}
+
+window   <- c(1985, max(rain$year))
+rain_win <- filter(rain, year >= window[1])
+
+jump  <- rain_win %>% group_by(country) %>% summarise(s = sd(value))
+climb <- rain_win %>% group_by(country) %>%
+  summarise(t = coef(lm(value ~ year))[2] * 10)   # mm per decade
+
+# median ABSOLUTE trend - the signed median lets wetting and drying countries
+# cancel, which is what inflated this to 8.5
+trend <- median(abs(climb$t))
+ratio <- median(jump$s) / trend
+
+round(median(jump$s), 1)   # 11.9
+round(trend, 1)            # 2.5
+round(ratio, 1)            # 4.7
+```
+
+Temperature climbs; rainfall swings. From one year to the next it moves
+about `r round(ratio, 0)` times as far as the trend moves in a decade
+(from data between 1985 and 2025).
+
+The temperature trend was only measurable because the same place was
+measured the same way for decades. Rainfall is the thing people plan
+around. Seeing it also takes more instruments as it moves faster and
+over shorter distances, but it is the thing the region has fewest
+instruments for.
+
+Year-to-year movement is the median country standard deviation
+(`r round(median(jump$s), 1)` mm); trend is the median absolute
+per-decade trend (`r round(trend, 1)` mm).
+
+```{r}
+ggplot(rain |> group_by(year) |> summarise(value=mean(value)), 
+              aes(year, value)) +
+  geom_hline(yintercept = 0, colour = "grey80") +
+  geom_line(colour = "#eb6834") +
+  labs(title = paste("Rainfall in the Pacific does not trend - it lurches"),
+       x = NULL, y = "Rainfall anomaly (mm)") +
+  theme_minimal()
+```
+
+# 4. The swings are El Nino, and a warming Pacific amplifies them
+
+During El Nino, warm water slides east and the rain follows it, so one
+half of the Pacific is wet while the other is dry.
+
+The damage lands hardest on countries that are small, remote and still
+developing.
+
+```{r}
+# Sabina, was this where you got the wet/dry classifications from? Please document :) Brown et al. (2020), Nature Reviews Earth & Environment, for the split itself; BoM/CSIRO PACCSAP country brochures for the per-country statements quoted below; BoM/CSIRO Vol.2 chapter for Tuvalu; NIWA Island Climate Update for Tokelau; Meteo-France for New Caledonia.
+
+spcz_itcz <- c(
+  # south-west Pacific - the SPCZ moves away from them
+  'Papua New Guinea' = 'dry',   # "El Nino years are usually drier than normal"
+  'Solomon Islands'  = 'dry',   # "warmer, drier wet season conditions"
+  'New Caledonia'    = 'dry',   # "risque accru de secheresse"
+  'Vanuatu'          = 'dry',   # "tend to bring drier conditions"
+  'Fiji'             = 'dry',   # dry season "drier and cooler than normal"
+  'Tonga'            = 'dry',   # "drier wet seasons"
+  'Samoa'            = 'dry',   # "wet seasons that are drier than normal"
+  'Niue'             = 'dry',   # "drier than normal, particularly in the wet season"
+  # equatorial central Pacific - the convection moves over them
+  'Kiribati'         = 'wet',   # "wetter, warmer conditions than normal"
+  'Tuvalu'           = 'wet',   # "the SPCZ tends to move to the north-east over Tuvalu"
+  'Nauru'            = 'wet',   # "warmer, wetter conditions than normal"
+  'Tokelau'          = 'wet'    # NIWA: enhanced convection near Tokelau in El Nino years
+)
+
+wet_side <- names(spcz_itcz)[spcz_itcz == "wet"]
+dry_side <- names(spcz_itcz)[spcz_itcz == "dry"]
+# Ten countries left out, each for a reason - they have no single El Nino rainfall direction, so averaging them in would blur the split rather than test it.
+#   Palau, Micronesia, Marshall Islands, Guam, N. Mariana Islands
+#     Micronesia runs on a lag: near or above normal early in the El Nino year,
+#     drought Jan-Mar of the FOLLOWING year. An annual mean cancels the two.
+#   Cook Islands       Rarotonga drier, northern atolls wetter.
+#   French Polynesia   Marquesas wetter, Australes drier, sign flips with flavour.
+#   Wallis and Futuna  Meteo-France: ENSO has little significant effect there.
+#   American Samoa     Sits on the SPCZ axis; individual events go both ways.
+#   Pitcairn           No authoritative ENSO rainfall assessment exists.
+excluded <- setdiff(unique(rain$country), names(spcz_itcz))
+excluded
+
+lean <- rain %>% inner_join(oni, by = "year") %>% group_by(country) %>%
+  summarise(r = cor(value, oni))
+
+check <- lean %>% filter(country %in% names(spcz_itcz)) %>%
+  mutate(assigned = spcz_itcz[country],
+         agrees   = (assigned == "wet" & r > 0) | (assigned == "dry" & r < 0))
+
+check
+mean(check$agrees)   # proportion of data agrees with the map
+wet <- rain %>% filter(country %in% wet_side) %>% group_by(year) %>% summarise(m = mean(value)) #mean rainfall anomaly for all wet countries
+dry <- rain %>% filter(country %in% dry_side) %>% group_by(year) %>% summarise(m = mean(value)) #mean rainfall anomaly for all dry countries
+# Check before writing prose around the chart. Brown et al. note that in the
+# strongest eastern-Pacific events - 1982-83 and 1997-98 - Nauru and Tarawa
+# went DRY despite normally being wetter, because the convection overshoots
+# the Gilberts and sits over the Line Islands. Kiribati and Nauru are two of
+# your four wet-side countries, and 1997-98 is one of your two named events.
+rain %>% filter(country %in% wet_side, year %in% c(2015, 2016)) %>%
+  select(country, year, value) %>% arrange(country, year)
+```
+
+Rather than count how often the two halves disagree, take the events the
+region already remembers. (El Nino graph idea: show graph below, then
+for 2015 event Papa New Guinea)
+
+```{r}
+split <- inner_join(wet, dry, by = "year", suffix = c("_wet", "_dry")) %>%
+  mutate(gap = m_wet - m_dry)
+
+filter(split, year %in% c(1997, 1998, 2015, 2016))   # the two big ones
+round(median(abs(split$gap)), 1)                     # a normal year, for scale
+```
+
+```{r}
+sides <- bind_rows(mutate(wet, side = "wetter in El Nino"),
+                   mutate(dry, side = "drier in El Nino"))
+
+ggplot(sides, aes(year, m, colour = side)) +
+  annotate("rect", xmin = c(1998.5, 2014.5), xmax = c(2000.5, 2016.5),
+           ymin = -Inf, ymax = Inf, fill = "grey85", alpha = .55) +
+  annotate("text", x = c(1999.5, 2015.5), y = Inf, label = c("1999-2000", "2015-16"),
+           vjust = 1.6, size = 3, colour = "grey30") +
+  geom_hline(yintercept = 0, colour = "grey80") +
+  geom_line(linewidth = 1) +
+  scale_colour_manual(values = c("wetter in El Nino" = "#2a78d6",
+                                 "drier in El Nino"  = "#d03b3b")) +
+  labs(title = "Two El Ninos, and the Pacific splits in half",
+       subtitle = "one side floods while the other dries out",
+       x = NULL, y = "Rainfall anomaly (mm)", colour = NULL) +
+  theme_minimal() + theme(legend.position = "bottom")
+```
+
+# 5. What that costs
+
+In Papua New Guinea the rain began falling away in April 2015.[^1]
+Between mid-July and mid-August, at the one high-altitude research
+station recording it, temperatures fell to minus two degrees before
+dawn. The frosts destroyed sweet potato, the staple, in gardens above
+2,200 metres — where a replanted crop takes eight to twelve months to
+mature.[^2]
+
+[^1]: R.M. Bourke, Bryant Allen and Michael Lowe, *Estimated impact of
+    drought and frost on food supply in rural PNG in 2015*, Development
+    Policy Centre Policy Brief 11, Australian National University,
+    January 2016, pp. 1–2. "Since April 2015, much of rural Papua New
+    Guinea (PNG) has been severely impacted by a severe drought and, at
+    a number of very high altitude locations above 2200 m altitude, by
+    repeated frosts." Frost temperatures of −2 °C were recorded between
+    5 and 7 am at Tambul High Altitude Agricultural Research Station
+    between mid-July and mid-August 2015 (Kud Sitango, NARI Tambul,
+    pers. comm.). Sweet potato takes 8–12 months to mature above 2,200 m
+    (p. 5).
+
+[^2]: R.M. Bourke, Bryant Allen and Michael Lowe, *Estimated impact of
+    drought and frost on food supply in rural PNG in 2015*, Development
+    Policy Centre Policy Brief 11, Australian National University,
+    January 2016, pp. 1–2. "Since April 2015, much of rural Papua New
+    Guinea (PNG) has been severely impacted by a severe drought and, at
+    a number of very high altitude locations above 2200 m altitude, by
+    repeated frosts." Frost temperatures of −2 °C were recorded between
+    5 and 7 am at Tambul High Altitude Agricultural Research Station
+    between mid-July and mid-August 2015 (Kud Sitango, NARI Tambul,
+    pers. comm.). Sweet potato takes 8–12 months to mature above 2,200 m
+    (p. 5).
+
+By the time anyone tried to count, food was very scarce or extremely
+scarce in 27 of Papua New Guinea's 271 rural districts. Those districts
+hold about 770,000 people, though the assessment calls that an upper
+limit and says the number actually short of food is likely to be
+considerably less, since not everyone in a district was equally
+affected.[^3] Nearly nine in ten of them live in the highlands.[^4]
+
+[^3]: Bourke, Allen and Lowe, op. cit., pp. 2, 4–5 and Tables 2–3. 27 of
+    271 rural LLGAs at rating 4 or 5; a maximum of 770,000 people, which
+    the authors describe as "an upper limit" with the number very short
+    of food "likely to be considerably less"; 53% at very high altitude
+    and 35% in the central highlands or highlands fringe; food supply
+    information obtained for 141 LLG areas and extrapolated to the
+    remaining 130; "the only national assessment of the food supply
+    situation for all PNG at the LLGA level".
+
+[^4]: Bourke, Allen and Lowe, op. cit., pp. 2, 4–5 and Tables 2–3. 27 of
+    271 rural LLGAs at rating 4 or 5; a maximum of 770,000 people, which
+    the authors describe as "an upper limit" with the number very short
+    of food "likely to be considerably less"; 53% at very high altitude
+    and 35% in the central highlands or highlands fringe; food supply
+    information obtained for 141 LLG areas and extrapolated to the
+    remaining 130; "the only national assessment of the food supply
+    situation for all PNG at the LLGA level".
+
+That assessment was built from more than two hundred reports — formal
+surveys, emails, phone calls, newspaper stories, photographs posted on
+Facebook. It covered 141 of the 271 districts. The other 130 were
+estimated from what had happened nearby, and from what had happened in
+1997.[^5] It remains the only national account of the emergency at that
+resolution.[^6] Its authors asked for the numbers to be checked in the
+field. That was not done.[^7]
+
+[^5]: Bourke, Allen and Lowe, op. cit., pp. 2, 4–5 and Tables 2–3. 27 of
+    271 rural LLGAs at rating 4 or 5; a maximum of 770,000 people, which
+    the authors describe as "an upper limit" with the number very short
+    of food "likely to be considerably less"; 53% at very high altitude
+    and 35% in the central highlands or highlands fringe; food supply
+    information obtained for 141 LLG areas and extrapolated to the
+    remaining 130; "the only national assessment of the food supply
+    situation for all PNG at the LLGA level".
+
+[^6]: Bourke, Allen and Lowe, op. cit., pp. 2, 4–5 and Tables 2–3. 27 of
+    271 rural LLGAs at rating 4 or 5; a maximum of 770,000 people, which
+    the authors describe as "an upper limit" with the number very short
+    of food "likely to be considerably less"; 53% at very high altitude
+    and 35% in the central highlands or highlands fringe; food supply
+    information obtained for 141 LLG areas and extrapolated to the
+    remaining 130; "the only national assessment of the food supply
+    situation for all PNG at the LLGA level".
+
+[^7]: DFAT Office of Development Effectiveness, *Evaluation of
+    Australia's response to the PNG El Niño drought and frosts 2015–17*:
+    "The researchers recommended field checking to clarify actual
+    numbers and set priorities; but this was not undertaken." Verified
+    against the document.
+
+There is no official death toll. Australia's review of its own response
+says an increase in mortality is likely and impossible to quantify.[^8]
+
+[^8]: DFAT evaluation, op. cit.: "It is likely that there was some
+    increase is [sic] all-causes mortality due to the 2015 El Niño… But
+    such an increase is impossible to quantify." Verified against the
+    document.
+
+An El Niño declaration is a statement about the ocean. A rainfall
+forecast for a district is a different thing: it is built from what
+rainfall at that place has done in past El Niños, so it can only ever be
+as local as the record behind it.
+
+The ocean was watched. By early April 2015, forecasters including the
+Australian Bureau of Meteorology were reporting a severe El Niño moving
+west.[^9] What no one could say was how much rain would fall in the
+Kandep basin, or when it would stop.
+
+[^9]: DFAT evaluation, op. cit.: "By early April 2015 climate
+    scientists, including from the Australian Bureau of Meteorology,
+    were reporting on the likelihood of a severe El Niño event, moving
+    from the eastern Pacific westwards." Verified against the document.
+
+```{r}
+# Table 2 of Policy Brief 11, transcribed by hand from the PDF.
+# CHECK IT: these columns sum to 752,234 against the brief's published
+# subtotal of 752,227, so at least one figure is misread.
+llg <- read.csv("data/png_2015_cat45_llga.csv")
+```
+
+```{r}
+# Coverage. The brief obtained food supply information for 141 of the 271
+# rural districts and extrapolated the other 130 from neighbouring areas and
+# from what happened in 1997. This is the chart the section rests on.
+coverage <- data.frame(i = 0:270) %>%
+  mutate(row = i %/% 30, col = i %% 30,
+         status = ifelse(i < 141, "Food supply reported",
+                                  "Estimated from neighbouring areas and from 1997"))
+
+ggplot(coverage, aes(col, -row, fill = status)) +
+  geom_tile(colour = "#1a3d5c", linewidth = .35, width = .85, height = .85) +
+  scale_fill_manual(values = c("Food supply reported" = "#1a3d5c",
+    "Estimated from neighbouring areas and from 1997" = "white")) +
+  coord_equal() +
+  labs(title = "Papua New Guinea's 271 rural districts, 2015 drought assessment",
+       fill = NULL) +
+  theme_void() + theme(legend.position = "bottom")
+```
+
+```{r}
+# Where the affected population was. Milne Bay is hard-coded because it is
+# Table 3 of the brief, which is not in the csv - add those seven island
+# wards if this chart is used.
+zones <- llg %>% group_by(zone) %>% summarise(pop = sum(pop_2015_est)) %>%
+  bind_rows(data.frame(zone = "Small islands, Milne Bay", pop = 18705)) %>%
+  mutate(share = pop / sum(pop),
+         highlands = zone %in% c("Very high altitude", "Highland and highland fringe"))
+
+ggplot(zones, aes(pop / 1000, reorder(zone, pop), fill = highlands)) +
+  geom_col(width = .65) +
+  geom_text(aes(label = sprintf("%.0fk  (%.0f%%)", pop / 1000, share * 100)),
+            hjust = -.15, size = 3.1, colour = "grey35") +
+  scale_fill_manual(values = c("TRUE" = "#1a3d5c", "FALSE" = "grey78"), guide = "none") +
+  expand_limits(x = 500) +
+  labs(title = "Nearly nine in ten were in the highlands",
+       x = "Thousand people in category 4 or 5 districts", y = NULL) +
+  theme_minimal()
+```
+
+```{r}
+# The 27 districts themselves.
+ggplot(llg, aes(pop_2015_est / 1000, reorder(llga, pop_2015_est),
+                colour = zone, size = factor(rating))) +
+  geom_point() +
+  scale_size_manual(values = c("4" = 2.2, "5" = 4), name = "Rating") +
+  scale_colour_manual(values = c("Very high altitude" = "#1a3d5c",
+                                 "Highland and highland fringe" = "#5b8ab0",
+                                 "Inland lowland Western Province" = "#eb6834"),
+                      name = NULL) +
+  labs(title = "The 27 districts where food was very or extremely scarce",
+       subtitle = "rating 5 = no food available at all; 4 = famine food only",
+       x = "Population, 2015 estimate (thousands)", y = NULL) +
+  theme_minimal() + theme(legend.position = "bottom", legend.box = "vertical")
+```
+
+```{r}
+# How many stations PNG actually reports to the international network.
+# NOTE: an earlier draft claimed PNG has the most in the region. It does not -
+# Fiji does. Whatever this returns, the point is the ratio to the country's
+# size, not the rank.
+png_stations <- stations %>% filter(country == "Papua New Guinea")
+
+range(png_stations$year)
+png_stations %>% filter(year %in% c(min(year), 2015, max(year))) %>%
+  select(year, n = value)
+
+stations %>% filter(year == max(year)) %>% arrange(-value) %>% head(3)
+```
+
+```{=html}
+<!--
+STILL OPEN in this section:
+
+1. Every footnote in this section is now verified against its source
+   document. Removed on checking: "PNG's National Weather Service declared a
+   severe El Nino on 7 August 2015" - that date does not appear in the DFAT
+   evaluation, which gives only 22 December 2015, when the National Weather
+   Office declared the PEAK had been reached. If a first-declaration date is
+   wanted, it needs a PNG NWS source, not this one.
+2. The csv transcription is 7 people out against the brief's own subtotal -
+   find the misread digit in the very-high-altitude or highland-fringe block.
+3. Milne Bay (Table 3 of the brief, 7 island wards, 18,705 people) is
+   hard-coded in the zones chunk rather than in the csv.
+4. Optional from the coworker's note: whether the OCHA situation reports
+   separate frost damage from drought. If they conflate the two, that is
+   worth a sentence, because this section now rests on a frost event inside
+   a wider drought.
+
+RESOLVED, for the record: "why PNG 2015-16 and not another example" - because
+the alternatives (Marshall Islands 2016, Palau 2016) are countries excluded
+from the section 4 grouping, and because the argument here is about localising
+a forecast rather than about who was warned.
+
+TODO(coworker): the numbers for this section come from UN OCHA situation
+reports and the Australian aid assessments, not from news coverage - the
+casualty and affected-population figures that circulated at the time were
+inconsistent and mostly recycled from each other. Pull:
+  - people affected, highlands provinces specifically
+  - how long the food shortage ran
+  - when the first warning was issued vs when the crops failed
+That last one is the whole point of the section, so if it can't be sourced,
+this becomes a different paragraph.
+
+consider infographic format?
+-->
+```
+
+```{r crosswalk}
+# GHCN-D and IGRA key on FIPS-2 (first two characters of the station ID);
+# WDQMS uses ISO3. Everything joins through this table.
+xwalk <- tribble(
+  ~fips, ~iso3,  ~country,                    ~grp,
+  "PP",  "PNG",  "Papua New Guinea",          "PICT",
+  "BP",  "SLB",  "Solomon Islands",           "PICT",
+  "NH",  "VUT",  "Vanuatu",                   "PICT",
+  "NC",  "NCL",  "New Caledonia",             "PICT",
+  "FJ",  "FJI",  "Fiji",                      "PICT",
+  "TN",  "TON",  "Tonga",                     "PICT",
+  "WS",  "WSM",  "Samoa",                     "PICT",
+  "AQ",  "ASM",  "American Samoa",            "PICT",
+  "NE",  "NIU",  "Niue",                      "PICT",
+  "CW",  "COK",  "Cook Islands",              "PICT",
+  "TV",  "TUV",  "Tuvalu",                    "PICT",
+  "KR",  "KIR",  "Kiribati",                  "PICT",
+  "NR",  "NRU",  "Nauru",                     "PICT",
+  "TL",  "TKL",  "Tokelau",                   "PICT",
+  "RM",  "MHL",  "Marshall Islands",          "PICT",
+  "FM",  "FSM",  "Micronesia",                "PICT",
+  "PS",  "PLW",  "Palau",                     "PICT",
+  "GQ",  "GUM",  "Guam",                      "PICT",
+  "CQ",  "MNP",  "Northern Mariana Islands",  "PICT",
+  "FP",  "PYF",  "French Polynesia",          "PICT",
+  "WF",  "WLF",  "Wallis and Futuna",         "PICT",
+  "PC",  "PCN",  "Pitcairn",                  "PICT",
+  "AS",  "AUS",  "Australia",                 "Comparator",
+  "NZ",  "NZL",  "New Zealand",               "Comparator"
+)
+
+pict       <- filter(xwalk, grp == "PICT")$country
+ACTIVE_CUT <- 2021
+```
+
+```{r load-archives}
+igra <- read_fwf(
+  "data/igra2-station-list.txt",
+  fwf_positions(c(1, 13, 22, 32, 42, 73, 78, 83),
+                c(11, 20, 30, 37, 71, 76, 81, 88),
+                c("id", "lat", "lon", "elev", "name", "first", "last", "nobs")),
+  col_types = "cddd" %>% paste0("ciii")
+) %>%
+  mutate(fips = str_sub(id, 1, 2)) %>%
+  inner_join(xwalk, by = "fips")
+
+ghcn_stn <- read_fwf(
+  "data/ghcnd-stations.txt",
+  fwf_positions(c(1, 13, 22, 32, 42), c(11, 20, 30, 37, 71),
+                c("id", "lat", "lon", "elev", "name")),
+  col_types = "cdddc"
+)
+
+ghcn_prcp <- read_fwf(
+  "data/ghcnd-inventory.txt",
+  fwf_positions(c(1, 13, 22, 32, 37, 42), c(11, 20, 30, 35, 40, 45),
+                c("id", "lat", "lon", "elem", "first", "last")),
+  col_types = "cddcii"
+) %>%
+  filter(elem == "PRCP") %>%
+  mutate(fips = str_sub(id, 1, 2)) %>%
+  inner_join(xwalk, by = "fips") %>%
+  left_join(select(ghcn_stn, id, elev, name), by = "id")
+
+stopifnot(nrow(igra) > 0, nrow(ghcn_prcp) > 0)
+```
+
+```{r load-wdqms}
+# ---------------------------------------------------------------------
+# WDQMS status categories:
+#   green   normal / complete
+#   purple  more than declared in OSCAR - schedule metadata fault, but
+#           the data IS arriving, so counted as reporting
+#   orange  availability issue, >= 30% received
+#   red     availability issue, < 30% received
+#   black   nothing received in the period
+#   grey    OSCAR schedule issue      } metadata faults,
+#   yellow  no match in OSCAR/Surface }  excluded from every rate
+#
+# Each station appears once per monitoring centre (DWD, ECMWF, JMA,
+# NCEP). WDQMS shows the best result across centres; collapse the same way.
+# ---------------------------------------------------------------------
+status_rank <- c(green = 1, purple = 2, orange = 3, red = 4,
+                 grey = 5, yellow = 6, black = 7)
+
+# Pacific territories report under the administering country's ISO code.
+# Guam and American Samoa appear as USA; without this they vanish from
+# the per-country tables and appear to have no stations at all.
+reassign_territory <- function(df) {
+  mutate(df, iso3 = case_when(
+    str_detect(name, regex("GUAM", ignore_case = TRUE))                     ~ "GUM",
+    str_detect(name, regex("PAGO PAGO|AMERICAN SAMOA", ignore_case = TRUE)) ~ "ASM",
+    str_detect(name, regex("SAIPAN|TINIAN|ROTA", ignore_case = TRUE))       ~ "MNP",
+    str_detect(name, regex("WALLIS|FUTUNA|HIHIFO", ignore_case = TRUE))     ~ "WLF",
+    TRUE ~ iso3))
+}
+
+read_wdqms <- function(path) {
+  read_csv(path, show_col_types = FALSE) %>%
+    rename(status = `color code`, iso3 = `country code`,
+           received = `#received`, expected = `#expected`) %>%
+    reassign_territory() %>%
+    mutate(rank = status_rank[status]) %>%
+    arrange(rank) %>%
+    distinct(wigosid, iso3, .keep_all = TRUE) %>%
+    inner_join(xwalk, by = "iso3")
+}
+
+land  <- read_wdqms("data/wdqms_LandSurface_synop_availability_monthly_pressure_oscar_2026-07.csv")
+upper <- read_wdqms("data/wdqms_UpperAir_temp_availability_monthly_oscar_2026-07.csv")
+
+# the marine quality export reports `rms` - root-mean-square departure
+# of the observation from the model background, in hPa
+marine <- read_csv("data/wdqms_marine_surface_quality_monthly_pressure_2026-07.csv",
+                   show_col_types = FALSE) %>%
+  rename(departure = rms)
+
+reporting_rate <- function(df, layer) {
+  df %>%
+    filter(!status %in% c("grey", "yellow")) %>%
+    group_by(country, grp) %>%
+    summarise(registered = n(),
+              reporting  = sum(status %in% c("green", "purple")),
+              silent     = sum(status == "black"),
+              received   = sum(received),
+              expected   = sum(expected), .groups = "drop") %>%
+    mutate(pct_obs = if_else(expected > 0, round(100 * received / expected), NA_real_),
+           layer   = layer)
+}
+```
+
+# 6. What a severe El Nino cost: Papua New Guinea, 2015-16
+
+In 2015 and into 2016 the drought reached the Papua New Guinea
+highlands, and frost came with it at altitude. Sweet potato failed
+across the provinces that grow most of it. Water sources that had never
+been gauged went dry, and the worst-hit places were the furthest from a
+road.
+
+The highlands are where most of the country's people live, between
+roughly 1,500 and 2,800 metres, and they are where almost none of the
+measurement is. What follows is not an account of a warning that came
+too late. It is an account of a failure that was, in the international
+record, invisible while it was happening.
+
+```{=html}
+<!--
+TODO(coworker): scale of impact from UN OCHA situation reports via
+ReliefWeb (Papua New Guinea, drought, 2015-16), plus PNG National
+Disaster Centre assessments. Use a sitrep with a stated methodology; the
+figures in news coverage at the time were inconsistent and mostly
+recycled from each other.
+-->
+```
+
+# 7. The country with the most instruments had the least warning
+
+Papua New Guinea has more weather stations than any other country in the
+region. That is the fact the rest of this piece has to explain, because
+it did not help.
+
+**Nothing measures rain above sea level.**
+
+```{r png-elevation}
+png_gauges <- filter(ghcn_prcp, country == "Papua New Guinea")
+
+png_summary <- png_gauges %>%
+  summarise(ever         = n(),
+            active       = sum(last >= ACTIVE_CUT),
+            highest_ever = max(elev, na.rm = TRUE),
+            above_1000   = sum(elev > 1000, na.rm = TRUE))
+
+png_summary
+```
+
+Of Papua New Guinea's `r png_summary$ever` internationally exchanged
+rain gauges, `r png_summary$active` are still reporting. The highest
+sits at `r round(png_summary$highest_ever)` metres. Across the whole
+record, `r png_summary$above_1000` have ever been placed above 1,000
+metres.
+
+```{r png-gauge-elevation-plot, fig.height=3.4}
+ggplot(png_gauges, aes(elev, fct_reorder(name, elev))) +
+  annotate("rect", xmin = 1500, xmax = 2800, ymin = -Inf, ymax = Inf,
+           fill = "#d03b3b", alpha = .12) +
+  annotate("text", x = 2150, y = 1.2, label = "where the 2015 drought bit",
+           size = 3, colour = "#d03b3b") +
+  geom_segment(aes(x = 0, xend = elev, yend = name),
+               colour = "grey75", linewidth = .4) +
+  geom_point(aes(colour = last >= ACTIVE_CUT), size = 2.4) +
+  scale_x_continuous(limits = c(0, 3000)) +
+  scale_y_discrete() +                          # <-- add this line
+  scale_colour_manual(values = c("TRUE" = "#1a3d5c", "FALSE" = "grey70"),
+                      labels = c("TRUE" = "still reporting", "FALSE" = "stopped"),
+                      name = NULL) +
+  labs(title = "Every rain gauge in Papua New Guinea is at sea level",
+       subtitle = "internationally exchanged gauges, GHCN-Daily",
+       x = "Elevation (m)", y = NULL) +
+  theme_minimal() +
+  theme(legend.position = "bottom", panel.grid.major.y = element_blank())
+```
+
+**The highland stations do exist. They are simply not switched on.**
+
+```{r png-wdqms}
+png_land <- filter(land, country == "Papua New Guinea") %>%
+  select(name, received, expected, status) %>%
+  arrange(desc(received), name)
+
+png_land
+```
+
+Papua New Guinea has `r nrow(png_land)` surface stations registered with
+WMO. Across July 2026 they returned
+`r format(sum(png_land$received), big.mark = ",")` of
+`r format(sum(png_land$expected), big.mark = ",")` expected observations
+— `r round(100 * sum(png_land$received) / sum(png_land$expected))`% —
+and `r sum(png_land$status == "black")` of them sent nothing at all.
+
+Two of the silent ones are **Goroka** and **Mendi North**: Eastern and
+Southern Highlands, at altitude, in the provinces the drought hit
+hardest. Goroka returned 0 of 403 expected observations that month.
+Mendi North, 0 of 248.
+
+So the instruments were not missing from the highlands. They were
+registered, counted, and included in every tally of how well observed
+Papua New Guinea is. They were not sending anything.
+
+```{=html}
+<!--
+CAVEAT TO PRINT: GHCN-D holds stations whose data is exchanged
+internationally. PNG's national service may hold highland records that
+never leave the country. That does not weaken the argument - the regional
+forecast centres, the global models and the satellite rainfall
+calibration all draw on the internationally exchanged set, so a record
+nobody outside PNG can see does not inform the outlook PNG gets back. Say
+this before a reviewer does.
+-->
+```
+
+The count was never the constraint.
+
+# 8. Against the standard, the ground layer mostly passes
+
+The international requirement is a spacing rule. GBON asks for surface
+land stations every 200 km, relaxed to 500 km for small island states,
+so global forecast models have enough of the atmosphere sampled to work
+with.
+
+```{r gbon-ground}
+# 500 km spacing = one per 250,000 km2 =  4 per million km2 (SIDS)
+# 200 km spacing = one per  40,000 km2 = 25 per million km2 (everyone else)
+# Applied to LAND, which is what the surface land provision covers.
+ground <- ghcn_prcp %>%
+  group_by(country, grp) %>%
+  summarise(gauges_ever = n(),
+            active      = sum(last >= ACTIVE_CUT),
+            last_obs    = max(last), .groups = "drop") %>%
+  mutate(required_per_million = if_else(grp == "PICT", 4, 25))
+
+arrange(ground, desc(active))
+```
+
+Run it honestly and the atoll states pass comfortably. Tuvalu is 26
+square kilometres; one gauge satisfies 500 km spacing several thousand
+times over. Nauru is 21. The rule returns *compliant* and means almost
+nothing.
+
+That is not reassurance. The spacing was chosen for the pressure field,
+which is smooth and continental in scale. Rainfall is neither. A network
+built to keep a global model stable is doing something different from a
+network built to see a drought forming in a valley, and passing the
+first test says nothing about the second.
+
+```{=html}
+<!--
+Methods appendix: minimum raingauge densities by physiographic unit -
+small islands and mountainous terrain are the densest categories - are in
+the Guide to Hydrological Practices, WMO-No. 168. Verify against the
+current edition before quoting values.
+
+Comparator artefact to state out loud: Australia shares thousands of
+gauges with GHCN-D, New Zealand shares around a dozen while operating
+hundreds. That is data-sharing policy, not capacity. GHCN-D measures
+INTERNATIONALLY VISIBLE rainfall data, which is the right metric here -
+but only if the piece says so.
+-->
+```
+
+# 9. The gauge problem is dispersion, not density
+
+Land area is the wrong denominator because a country is not a tile. It
+is a set of places, and the distance between them is what a rain gauge
+cannot cross.
+
+```{r dispersion}
+max_separation_km <- function(lat, lon) {
+  if (length(lat) < 2) return(NA_real_)
+  max(distm(cbind(lon, lat)) / 1000)
+}
+
+spread <- ghcn_prcp %>%
+  filter(last >= ACTIVE_CUT, country %in% pict) %>%
+  group_by(country) %>%
+  summarise(active = n(), span_km = max_separation_km(lat, lon)) %>%
+  arrange(desc(span_km))
+
+spread
+```
+
+Kiribati's two reporting gauges sit
+`r format(round(filter(spread, country == "Kiribati")$span_km, -1), big.mark = ",")`
+km apart. Micronesia's twenty span
+`r format(round(filter(spread, country == "Micronesia")$span_km, -1), big.mark = ",")`
+km. Papua New Guinea's five are strung along
+`r format(round(filter(spread, country == "Papua New Guinea")$span_km, -1), big.mark = ",")`
+km of coast with nothing inland.
+
+```{r dispersion-plot, fig.height=4.2}
+ggplot(spread, aes(span_km, active)) +
+  geom_point(aes(size = active), colour = "#1a3d5c", alpha = .7) +
+  geom_text_repel(aes(label = country), size = 2.6, colour = "grey35",
+                  seed = 1, max.overlaps = 15) +
+  scale_x_continuous(labels = scales::comma) +
+  scale_size_continuous(range = c(2, 9), guide = "none") +
+  labs(title = "Few gauges, spread across a great deal of ocean",
+       subtitle = "gauges still reporting rainfall, GHCN-Daily",
+       x = "Greatest distance between two gauges (km)",
+       y = "Gauges reporting") +
+  theme_minimal()
+```
+
+```{r no-gauges}
+filter(ground, active == 0, grp == "PICT") %>%
+  select(country, gauges_ever, last_obs) %>%
+  arrange(last_obs)
+```
+
+Every island without one is a place where the satellite rainfall
+estimate goes uncalibrated and no forecast can be checked against what
+fell.
+
+# 10. Rainfall takes three layers. One of them is gone.
+
+Rainfall is not one measurement. Radiosondes in the upper atmosphere
+steer it, showing where the convection will go over the next few days.
+Buoys and ships at the ocean surface fuel it, showing where the warm
+water and the moisture sit weeks to seasons ahead. Gauges on the ground
+record what arrived, and calibrate everything else.
+
+**The ocean layer works.**
+
+```{r marine-quality}
+pacific_box <- marine %>%
+  filter(between(latitude, -30, 25), longitude >= 130 | longitude <= -130)
+
+tibble(platforms_pacific   = nrow(pacific_box),
+       platforms_global    = nrow(marine),
+       median_rms_pacific  = round(median(pacific_box$departure), 2),
+       median_rms_global   = round(median(marine$departure), 2),
+       pct_within_1hPa_pac = round(100 * mean(pacific_box$departure <= 1)),
+       pct_within_1hPa_glb = round(100 * mean(marine$departure <= 1)))
+
+count(pacific_box, marine_type)
+```
+
+`r nrow(pacific_box)` platforms reported in the tropical Pacific through
+July 2026 — moorings along the equator, ships on the lanes, drifters
+between. `r round(100 * mean(pacific_box$departure <= 1))`% sat within 1
+hPa RMS of the forecast model, against
+`r round(100 * mean(marine$departure <= 1))`% globally. The ocean around
+these islands is better observed than the ocean on average.
+
+Almost none of it is paid for or operated from within the region, which
+matters for how long it lasts. It does not matter for whether the data
+exists today. It exists.
+
+**The ground layer is thin and badly placed, but it is there.**
+
+**The upper-air layer has almost gone.**
+
+```{r upper-air-history}
+upper_hist <- igra %>%
+  group_by(country) %>%
+  summarise(sites_ever = n(), active = sum(last >= 2024),
+            last_year = max(last), .groups = "drop")
+
+lost  <- filter(upper_hist, country %in% pict, active == 0, sites_ever > 0)
+never <- setdiff(pict, igra$country)
+
+arrange(lost, desc(last_year)) %>% select(country, sites_ever, last_year)
+never
+```
+
+Papua New Guinea's last sounding was in
+**`r filter(lost, country == "Papua New Guinea")$last_year`**. Not the
+year before the drought, or the year after. The year of it. Solomon
+Islands stopped in
+`r filter(lost, country == "Solomon Islands")$last_year`, Nauru in
+`r filter(lost, country == "Nauru")$last_year`, Tonga in
+`r filter(lost, country == "Tonga")$last_year`, Samoa in
+`r filter(lost, country == "Samoa")$last_year`.
+`r knitr::combine_words(never)` never had one.
+
+# 11. The layer that dies first is the one nobody sees
+
+Every radiosonde launch consumes a balloon, gas and a sonde. Upper-air
+observation is not a thing you install; it is a thing you pay for twice
+a day, forever, with trained staff. So it is the first line item to go
+when a programme ends, and its ending produces no visible event.
+
+```{r upper-air-decline, fig.height=3.6}
+pic_sondes <- filter(igra, country %in% pict)
+
+active_by_year <- tibble(year = 1950:2026) %>%
+  mutate(sites = map_int(year, ~ sum(pic_sondes$first <= .x & pic_sondes$last >= .x)))
+
+peak <- slice_max(active_by_year, sites, n = 1, with_ties = FALSE)
+now  <- filter(active_by_year, year == 2026)$sites
+
+ggplot(active_by_year, aes(year, sites)) +
+  geom_area(fill = "#1a3d5c", alpha = .15) +
+  geom_line(colour = "#1a3d5c", linewidth = 1) +
+  geom_vline(xintercept = 2015, linetype = "dotted", colour = "#d03b3b") +
+  annotate("text", x = 2013, y = peak$sites * .85,
+           label = "PNG's last sounding, 2015",
+           hjust = 1, size = 3, colour = "#d03b3b") +
+  labs(title = paste0("Pacific radiosonde sites peaked at ", peak$sites,
+                      " in ", peak$year, ", and stand at ", now),
+       subtitle = "sites with soundings in each year, IGRA v2",
+       x = NULL, y = "Radiosonde sites") +
+  theme_minimal()
+```
+
+Nothing announced any of this. The forecast kept arriving — interpolated
+from whatever instrument was nearest and still working, still about
+right for the region and much less useful for any one valley — and a
+record that ran for decades stopped without anyone signing off on it.
+
+# 12. Existing is not reporting
+
+A station in the register is not a station sending data. WMO monitors
+both, and the difference between them is where the network quietly
+stopped.
+
+```{r reporting-both-layers}
+rates <- bind_rows(reporting_rate(land,  "Surface"),
+                   reporting_rate(upper, "Upper air"))
+
+rates %>%
+  select(country, layer, registered, reporting, silent, received, expected, pct_obs) %>%
+  arrange(layer, pct_obs)
+```
+
+Papua New Guinea has
+`r filter(rates, country == "Papua New Guinea", layer == "Upper air")$registered`
+radiosonde stations registered with WMO and received
+**`r filter(rates, country == "Papua New Guinea", layer == "Upper air")$received`
+of
+`r filter(rates, country == "Papua New Guinea", layer == "Upper air")$expected`**
+expected soundings in July 2026. Solomon Islands and Tuvalu are also
+registered for upper-air observation, and also sent nothing.
+
+The obligation is on the books. The balloons are not going up.
+
+**And the two layers come apart inside the same country.**
+
+```{r layer-divergence, fig.height=4.4}
+paired <- rates %>%
+  filter(!is.na(pct_obs)) %>%
+  select(country, grp, layer, pct_obs) %>%
+  pivot_wider(names_from = layer, values_from = pct_obs) %>%
+  filter(!is.na(Surface), !is.na(`Upper air`))
+
+ggplot(paired, aes(Surface, `Upper air`)) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey80", linetype = "dashed") +
+  annotate("text", x = 95, y = 88, label = "both layers equal",
+           angle = 45, size = 3, colour = "grey55") +
+  geom_point(aes(colour = grp), size = 3, alpha = .8) +
+  geom_text_repel(aes(label = country), size = 2.7, colour = "grey35",
+                  seed = 1, max.overlaps = 20) +
+  scale_colour_manual(values = c(PICT = "#1a3d5c", Comparator = "#eb6834"),
+                      name = NULL) +
+  scale_x_continuous(labels = \(x) paste0(x, "%")) +
+  # scale_y_continuous(labels = \(x) paste0(x, "%")) +
+  labs(title = "The layer somebody else pays for is the layer that works",
+       subtitle = "observations received against expected, July 2026",
+       x = "Surface stations", y = "Radiosonde stations") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+Micronesia returned
+`r filter(rates, country == "Micronesia", layer == "Upper air")$pct_obs`%
+of its expected soundings and
+`r filter(rates, country == "Micronesia", layer == "Surface")$pct_obs`%
+of its expected surface observations. Palau,
+`r filter(rates, country == "Palau", layer == "Upper air")$pct_obs`%
+against
+`r filter(rates, country == "Palau", layer == "Surface")$pct_obs`%. The
+Marshall Islands,
+`r filter(rates, country == "Marshall Islands", layer == "Upper air")$pct_obs`%
+against
+`r filter(rates, country == "Marshall Islands", layer == "Surface")$pct_obs`%.
+
+These are the same countries, the same staff, the same islands. What
+differs is that the radiosonde programme in the freely associated states
+is run and funded through the United States National Weather Service,
+while the surface network is a national responsibility. Where an outside
+programme carries the recurring cost, the observations arrive. Where it
+does not, they do not — and the pattern reverses cleanly for Papua New
+Guinea, which is on its own for both.
+
+That is not a comment on anyone's competence. It is a statement about
+which line items have a funder, and it says where money would actually
+change something.
+
+This is also what makes the gap so easy to miss. Every silent station is
+still counted. They appear in the register, in the network totals, and
+in any assessment built on how many stations a country has. On paper the
+region is better observed than it was thirty years ago.
+
+# 13. Where something is watching, it is watching the slow thing
+
+```{r sea-level-vs-weather}
+latest  <- stations %>% filter(year == max(year)) %>% select(country, n = value)
+watched <- latest %>%
+  mutate(sea_level = country %in% unique(sea_lvl$country))
+
+sum(watched$sea_level)
+filter(watched, n == 0, sea_level)
+```
+
+Sea level is measured carefully in places with no working weather
+station at all. That is not a judgement anyone made about which threat
+mattered more. Tide gauges and rain gauges are different instruments,
+installed by different programmes, on different funding cycles,
+answering to different agencies. A country can hold a thirty-year sea
+level record and no current rainfall record because two donors made two
+decisions a decade apart.
+
+Worth saying plainly, because it makes the gap a fixable administrative
+fact rather than a natural feature of small islands.
+
+# 14. Close
+
+The Pacific can describe its rainfall after the fact, thinly and in the
+wrong places. It cannot see it coming. The layer of the atmosphere that
+would show it arriving has been switched off across most of the region,
+one station at a time, and much of what remains on the ground is
+registered, counted, and silent.
+
+*You cannot get ready for a change you cannot watch arriving. How ready
+are we for the next El Nino?*

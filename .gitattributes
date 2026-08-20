@@ -1,0 +1,8 @@
+* text=auto eol=lf
+
+*.png  binary
+*.pdf  binary
+*.pbix binary
+*.xlsx binary
+*.docx binary
+*.geojson -text
