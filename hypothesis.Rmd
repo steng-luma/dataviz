@@ -22,7 +22,7 @@ climate <- read.csv("data/climate_change.csv") %>%
          value     = OBS_VALUE,
          indicator = CLIMATE_CHANGE_INDICATORS)
 
-oni <- read.csv("data/oni.csv") %>% select(year = Year, oni = MEAN)
+roni <- read.csv("data/roni.csv") %>% select(year = Year, roni = MEAN)
 
 sea_temp <- filter(climate, indicator == "SST_ANOM")   # degrees C, 1850-2025
 rain     <- filter(climate, indicator == "RAIN_ANOM")  # mm, 1979-2025
@@ -345,8 +345,8 @@ dry_side <- names(spcz_itcz)[spcz_itcz == "dry"]
 excluded <- setdiff(unique(rain$country), names(spcz_itcz))
 excluded
 
-lean <- rain %>% inner_join(oni, by = "year") %>% group_by(country) %>%
-  summarise(r = cor(value, oni))
+lean <- rain %>% inner_join(roni, by = "year") %>% group_by(country) %>%
+  summarise(r = cor(value, roni))
 
 check <- lean %>% filter(country %in% names(spcz_itcz)) %>%
   mutate(assigned = spcz_itcz[country],
