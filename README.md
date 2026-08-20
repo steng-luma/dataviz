@@ -29,14 +29,10 @@ R with **tidyverse**, **geosphere** and **ggrepel**.
 install.packages(c("tidyverse", "geosphere", "ggrepel"))
 ```
 
-Then knit `visualisations_hypothesis (final).Rmd` **from the repository root** — it reads
-`climate_change.csv` and `oni.csv` from the working directory and everything else from `data/`,
+Then knit `hypothesis.Rmd` **from the repository root** — it reads all data from `data/`,
 so the paths only resolve if the root is the working directory.
 
-Three raw files are too large for the repo and are gitignored. Download them into `data/`
-first; links are in [`data/README.md`](data/README.md).
-
-The app in `index.html` is hand-built rather than knitted — the series it plots are baked into
+The app in `dataviz.html` is hand-built rather than knitted — the series it plots are baked into
 a single `D` object near the bottom of the file, taken from the analysis above. Changing a
 number means changing it in both places.
 
