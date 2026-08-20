@@ -10,10 +10,6 @@ archive/
 *_cache/
 *_files/
 
-# ---- Knitted output (the published app is index.html) ----
-visualisations_hypothesis*.html
-visualisations_hypothesis*.md
-
 # ---- Office / Power BI scratch ----
 ~$*
 *.pbix.bak
