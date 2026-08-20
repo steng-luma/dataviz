@@ -1,0 +1,30 @@
+# ---- Large raw sources (re-downloadable; provenance in data/README.md) ----
+data/ghcnd-inventory.txt
+data/Pacific islands region land.geojson
+data/EEZ_land_union_v4_202410/
+
+# ---- Superseded SPC extracts, kept locally only ----
+archive/
+
+# ---- R ----
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+*_cache/
+*_files/
+
+# ---- Knitted output (the published app is index.html) ----
+visualisations_hypothesis*.html
+visualisations_hypothesis*.md
+
+# ---- Office / Power BI scratch ----
+~$*
+*.pbix.bak
+*.tmp
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
