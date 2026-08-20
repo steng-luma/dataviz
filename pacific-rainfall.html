@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="en" data-palette="#3987e5,#d95926,#199e70">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Pacific can't see its own rain</title>
+<style>
+:root{
+  --ocean-0:#060f18; --ocean-1:#0d1b2a; --ocean-2:#132a3f; --ocean-3:#1d3a54;
+  --ink-1:#f2f6fa; --ink-2:#a9bccd; --ink-3:#6d8399;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --warn:#e6b800; --bad:#e66767;
+  --grid:rgba(169,188,205,.14); --rule:rgba(169,188,205,.22);
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--ocean-0);color:var(--ink-1);font-family:var(--sans);
+  font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased}
+
+/* ---------- progress + nav ---------- */
+#bar{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--s1),var(--s3));z-index:60}
+nav{position:fixed;top:0;right:0;left:0;z-index:50;display:flex;gap:.15rem;justify-content:center;
+  flex-wrap:wrap;padding:.55rem .8rem;background:rgba(6,15,24,.82);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--rule)}
+nav a{color:var(--ink-3);text-decoration:none;font-size:11.5px;letter-spacing:.04em;
+  text-transform:uppercase;padding:.3rem .5rem;border-radius:4px;white-space:nowrap}
+nav a:hover{color:var(--ink-1);background:var(--ocean-2)}
+nav a.on{color:var(--s1)}
+
+/* ---------- layout ---------- */
+main{max-width:1080px;margin:0 auto;padding:0 1.4rem 8rem;text-align:center}
+section{padding:5.5rem 0 1rem;scroll-margin-top:64px}
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;
+  align-items:center;padding-top:5rem}
+.hero figure{width:100%}
+h1{font-size:clamp(2.3rem,6.2vw,4.6rem);line-height:1.03;margin:0 0 1.1rem;letter-spacing:-.025em;
+  font-weight:700;text-wrap:balance}
+h1 em{font-style:normal;color:var(--s2)}
+h2{font-size:clamp(1.45rem,3.2vw,2.15rem);line-height:1.18;margin:0 0 .5rem;letter-spacing:-.015em;
+  text-wrap:balance;max-width:24ch;margin-left:auto;margin-right:auto}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--s1);margin:0 auto .9rem;max-width:none}
+p{max-width:58ch;color:var(--ink-2);margin-left:auto;margin-right:auto;text-wrap:pretty}
+p strong{color:var(--ink-1);font-weight:600}
+.lede{font-size:clamp(1.05rem,2vw,1.28rem);color:var(--ink-1);max-width:52ch}
+.note{font-size:13.5px;color:var(--ink-3);max-width:64ch}
+.src{font-size:12px;color:var(--ink-3);font-family:var(--mono);margin-top:.6rem;
+  max-width:70ch;margin-left:auto;margin-right:auto;line-height:1.5}
+.src a{color:var(--ink-3)}
+hr.rule{border:0;border-top:1px solid var(--rule);margin:3.2rem 0 0}
+
+/* ---------- fixed stage: the viewport never moves, slides cross-fade ----------
+   The stack is tall so there is something to scroll; the stage inside it is
+   sticky, so it holds still while scroll position drives which slide is lit. */
+.stack{position:relative}
+.stage{position:sticky;top:0;height:100svh;overflow:hidden}
+.slide{position:absolute;inset:0;display:grid;place-items:center;
+  padding:3.6rem 1.4rem 1.5rem;transform-origin:50% 50%;
+  transition:opacity .10s linear,transform .10s linear}
+.slide-in{width:100%;max-width:1080px;max-height:100%;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.slide-in::-webkit-scrollbar{width:6px}
+.slide-in::-webkit-scrollbar-thumb{background:var(--rule);border-radius:3px}
+.panel{display:contents}
+.panel-inner{width:100%}
+
+/* ---------- scroll-linked fade ---------- */
+/* Opacity and lift are written inline by the scroll loop, so a block is brightest
+   when it sits at the centre of the viewport and dims toward both edges. */
+/* no blanket will-change: promoting every block to its own compositing layer
+   costs memory and caused fixed-position paint glitches in testing */
+.fb{}
+.fb-pre{opacity:0}                    /* before the loop has measured anything */
+
+/* ---------- sticky scrollytelling ---------- */
+.scrolly{padding-top:4rem;overflow-x:clip;scroll-snap-align:none}
+.scrolly .step{scroll-snap-align:center}
+.scrolly-inner{display:block}
+.scrolly-graphic{position:sticky;top:60px;max-width:470px;margin:0 auto;z-index:20;
+  background:var(--ocean-0);padding:.6rem 0 0}
+/* full-bleed opaque panel behind the pinned diagram, so step text scrolling up
+   disappears behind it cleanly instead of showing through beside or above it */
+.scrolly-graphic::before{content:'';position:absolute;left:-50vw;right:-50vw;top:-72px;bottom:0;
+  background:var(--ocean-0);z-index:0;pointer-events:none}
+.scrolly-graphic::after{content:'';position:absolute;left:-50vw;right:-50vw;bottom:-30px;
+  height:32px;background:linear-gradient(var(--ocean-0),transparent);z-index:0;pointer-events:none}
+.scrolly-graphic svg{position:relative;z-index:1}
+/* step content sits in the band BELOW the pinned diagram */
+.scrolly-steps>.step{min-height:78vh;display:flex;flex-direction:column;justify-content:flex-end;
+  align-items:center;max-width:54ch;margin:0 auto;padding-bottom:9vh}
+.step .stepnum{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--ink-3);
+  text-transform:uppercase;margin-bottom:.5rem}
+.step h3{font-size:clamp(1.25rem,2.6vw,1.7rem);margin:0 0 .6rem;letter-spacing:-.015em;
+  transition:color .4s}
+/* `margin:0 0 .8rem` beat the global `p{margin-inline:auto}`, so step text sat
+   left of the heading it belongs to. Keep the auto side margins. */
+.step p{font-size:15.5px;margin:0 auto .8rem}
+.step .verdict{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;
+  padding:.3rem .7rem;border:1px solid;border-radius:20px;display:inline-block}
+/* Only dim steps while they are stacked in the pinned column, where dimming is
+   the mechanism. Once a step is moved onto the fixed stage it is the only thing
+   on screen, so it must be fully lit regardless of what the old observer thinks
+   - scoping this beat leaving the `.on` class to two owners that disagreed. */
+.scrolly-steps .step{opacity:.34;transition:opacity .45s}
+.scrolly-steps .step.on{opacity:1}
+.step[data-layer=air] h3{color:var(--s3)} .step[data-layer=air] .verdict{color:var(--bad);border-color:var(--bad)}
+.step[data-layer=sea] h3{color:var(--s1)} .step[data-layer=sea] .verdict{color:var(--s3);border-color:var(--s3)}
+.step[data-layer=gnd] h3{color:var(--s2)} .step[data-layer=gnd] .verdict{color:var(--warn);border-color:var(--warn)}
+/* layer diagram */
+/* NOT scoped to #diag: the per-slide copies of the diagram have their id
+   stripped, so an #diag-scoped rule left every band un-highlighted. */
+.diag .band{transition:opacity .5s,fill .5s} .diag .glyph{transition:opacity .5s,transform .5s}
+.diag .bandlab{transition:opacity .5s,fill .5s}
+.diag .dim{opacity:.2}
+.diag .lit{opacity:1}
+/* the lit band's wash is set inline at .16 for the stacked view; on its own
+   slide it carries the whole highlight, so lift it */
+.diag .lit .band{opacity:.3}
+@media (max-width:820px){
+  .scrolly-graphic{top:56px;max-width:100%}
+  .scrolly-steps>.step{min-height:70vh;padding-bottom:6vh}
+}
+
+/* ---------- cards & figures ---------- */
+figure{margin:1.4rem 0;background:var(--ocean-1);border:1px solid var(--rule);border-radius:12px;
+  padding:1.1rem 1.2rem .95rem;overflow:hidden}
+figcaption{font-size:14px;color:var(--ink-2);margin-top:.85rem;max-width:66ch;
+  margin-left:auto;margin-right:auto}
+figcaption b{color:var(--ink-1)}
+.figtitle{font-size:15.5px;font-weight:600;color:var(--ink-1);margin-bottom:.15rem}
+.figsub{font-size:13px;color:var(--ink-3);margin-bottom:1rem}
+
+/* ---------- stats ---------- */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem;margin:1.3rem 0}
+.stat{background:var(--ocean-1);border:1px solid var(--rule);border-radius:10px;padding:1.05rem;text-align:center}
+.stat .n{font-size:2.1rem;font-weight:700;letter-spacing:-.03em;line-height:1.05;font-variant-numeric:tabular-nums}
+.stat .l{font-size:12.5px;color:var(--ink-3);margin-top:.35rem;line-height:1.4;
+  max-width:22ch;margin-left:auto;margin-right:auto}
+.stat.a .n{color:var(--s1)} .stat.b .n{color:var(--s2)} .stat.c .n{color:var(--s3)}
+.stat.d .n{color:var(--bad)}
+.hero-n{font-size:clamp(3.4rem,11vw,7rem);font-weight:700;letter-spacing:-.045em;line-height:.95;
+  color:var(--s2);font-variant-numeric:tabular-nums}
+
+/* ---------- controls ---------- */
+.controls{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin:0 0 1.1rem;
+  justify-content:center}
+label.ctl{font-size:12px;color:var(--ink-3);display:flex;flex-direction:column;gap:.28rem;
+  align-items:center;font-family:var(--mono);
+  letter-spacing:.06em;text-transform:uppercase}
+select,input[type=range]{background:var(--ocean-2);color:var(--ink-1);border:1px solid var(--rule);
+  border-radius:7px;padding:.42rem .6rem;font-family:var(--sans);font-size:14px;min-width:150px}
+input[type=range]{padding:0;height:26px;min-width:190px;accent-color:var(--s2)}
+.chips{display:flex;gap:.35rem;flex-wrap:wrap}
+.chip{background:var(--ocean-2);border:1px solid var(--rule);color:var(--ink-2);border-radius:20px;
+  padding:.26rem .68rem;font-size:12.5px;cursor:pointer;user-select:none}
+.chip[aria-pressed=true]{background:var(--s1);border-color:var(--s1);color:#04121f;font-weight:600}
+.tblbtn{background:none;border:1px solid var(--rule);color:var(--ink-3);border-radius:6px;
+  padding:.28rem .6rem;font-size:11.5px;cursor:pointer;font-family:var(--mono);letter-spacing:.06em;
+  text-transform:uppercase}
+.tblbtn:hover{color:var(--ink-1)}
+.tblwrap{display:none;margin-top:1rem;max-height:290px;overflow:auto;border:1px solid var(--rule);
+  border-radius:8px;text-align:left;max-width:760px;margin-left:auto;margin-right:auto}
+.tblwrap.on{display:block}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:.4rem .6rem;text-align:right;border-bottom:1px solid var(--grid)}
+th{position:sticky;top:0;background:var(--ocean-2);color:var(--ink-2);font-weight:600;text-align:right}
+th:first-child,td:first-child{text-align:left}
+
+/* ---------- legend ---------- */
+.legend{display:flex;gap:1rem;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);
+  margin-bottom:.9rem;justify-content:center}
+.legend span{display:flex;align-items:center;gap:.4rem}
+.sw{width:11px;height:11px;border-radius:3px;flex:none}
+.swl{width:16px;height:2px;border-radius:2px;flex:none}
+
+/* ---------- svg ---------- */
+svg{display:block;width:100%;height:auto;overflow:visible}
+.ax text{fill:var(--ink-3);font-size:11px;font-family:var(--mono)}
+.ax line,.ax path{stroke:var(--grid)}
+.gl{stroke:var(--grid);stroke-width:1}
+.dlab{font-size:11.5px;font-weight:600;font-family:var(--sans)}
+.hit{fill:transparent;cursor:crosshair}
+.cross{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:3 3;pointer-events:none;opacity:0}
+.tip{position:fixed;pointer-events:none;background:rgba(6,15,24,.97);border:1px solid var(--rule);
+  border-radius:8px;padding:.5rem .65rem;font-size:12.5px;color:var(--ink-1);z-index:70;opacity:0;
+  transition:opacity .1s;max-width:250px;box-shadow:0 8px 26px rgba(0,0,0,.5);font-variant-numeric:tabular-nums}
+.tip b{color:var(--s2)}
+.tip .r{display:flex;justify-content:space-between;gap:1rem}
+.tip .k{color:var(--ink-3)}
+
+/* ---------- waffle ---------- */
+.waffle{display:grid;grid-template-columns:repeat(30,1fr);gap:3px;margin:.4rem 0 0}
+.cell{aspect-ratio:1;border-radius:2px;border:1px solid var(--s1)}
+.cell.f{background:var(--s1)}
+.cell.e{background:transparent}
+
+/* ---------- layer cards ---------- */
+.layers{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.9rem;margin:1.8rem 0}
+.layer{background:var(--ocean-1);border:1px solid var(--rule);border-left:3px solid;border-radius:10px;padding:1.1rem}
+.layer h3{margin:.1rem 0 .4rem;font-size:15.5px}
+.layer p{font-size:13.5px;margin:0;max-width:none}
+.layer .verdict{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-top:.7rem}
+.l-air{border-left-color:var(--s3)} .l-air .verdict{color:var(--bad)}
+.l-sea{border-left-color:var(--s1)} .l-sea .verdict{color:var(--s3)}
+.l-gnd{border-left-color:var(--s2)} .l-gnd .verdict{color:var(--warn)}
+
+.pull{border-top:2px solid var(--s2);border-bottom:2px solid var(--s2);padding:1.3rem 0;margin:2.8rem auto;
+  font-size:clamp(1.15rem,2.4vw,1.5rem);line-height:1.42;color:var(--ink-1);max-width:46ch}
+footer{border-top:1px solid var(--rule);margin-top:4rem;padding:2.2rem 0;font-size:13px;
+  color:var(--ink-3);text-align:center}
+footer p{max-width:66ch}
+footer a{color:var(--ink-2)}
+@media (max-width:700px){
+  .dlab{display:none}          /* direct labels collide at phone width - hover + table view carry identity */
+}
+@media (max-width:640px){
+  figure{padding:1rem .8rem}
+  .waffle{grid-template-columns:repeat(20,1fr);gap:2px}
+  nav a{font-size:10px;padding:.25rem .35rem}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{transition:none!important;animation:none!important}
+  /* fall back to an ordinary long page: stage releases, slides stack in flow */
+  .stage{position:static;height:auto;overflow:visible}
+  .slide{position:static;opacity:1!important;transform:none!important;
+    padding:2.4rem 0;min-height:0}
+  .slide-in{max-height:none;overflow:visible}
+  .stack{height:auto!important}
+  .fb,.fb-pre{opacity:1!important;transform:none!important}
+}
+@media (max-width:640px){ .slide{padding:4rem .9rem 1.6rem} }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<nav id="nav">
+  <a href="#start">Start</a><a href="#record">The record</a><a href="#swing">The swing</a>
+  <a href="#split">El Niño</a><a href="#png">PNG 2015</a><a href="#layers">Three layers</a>
+  <a href="#ocean">Ocean</a><a href="#ground">Ground</a><a href="#air">Upper air</a>
+  <a href="#silent">Who pays</a><a href="#close">Close</a>
+</nav>
+<div class="tip" id="tip"></div>
+
+<main>
+
+<!-- ================= HERO ================= -->
+<section class="hero" id="start">
+  <p class="eyebrow">Pacific Data Viz Challenge 2026</p>
+  <h1>The Pacific can describe its rain<br>after the fact. It cannot<br><em>see it coming.</em></h1>
+  <p class="lede">The ocean around these islands is better observed than the world's ocean
+  on average. The air above them is barely observed at all. This is a story about which
+  instruments exist, which ones are switched on, and what happened the last time it mattered.</p>
+
+  <figure>
+    <div class="figtitle">Start with you</div>
+    <div class="figsub">Pick a birth year and a place. The line is the sea temperature anomaly measured there.</div>
+    <div class="controls">
+      <label class="ctl">Born<select id="byear"></select></label>
+      <label class="ctl">Place<select id="bplace"></select></label>
+    </div>
+    <div class="stats" style="margin:.4rem 0 1.1rem">
+      <div class="stat b"><div class="n" id="warmN">—</div><div class="l" id="warmL">warming since your first decade</div></div>
+      <div class="stat a"><div class="n" id="obsN">—</div><div class="l">years of record for this place</div></div>
+    </div>
+    <div id="c-hero"></div>
+    <figcaption id="heroCap"></figcaption>
+    <div class="src">Source: SPC Pacific Data Hub, <code>SST_ANOM</code>. Anomaly in °C.</div>
+  </figure>
+</section>
+
+<hr class="rule">
+
+<!-- ================= RECORD ================= -->
+<section id="record">
+  <p class="eyebrow">01 — Where the long record came from</p>
+  <h2>The long record was never about these islands</h2>
+  <p>Ships logged sea temperature on their way to somewhere else. Satellites read the surface
+  from orbit. Both cover the Pacific because the Pacific is in the way — neither was built to
+  watch these islands. A line drawn back to 1850 is not the same thing as a country measuring
+  its own weather, and the two come apart badly once we look at what is on the ground.</p>
+
+  <figure>
+    <div class="figtitle">Regional sea temperature anomaly, 1850–2025</div>
+    <div class="figsub">Countries averaged. Fitted line has breakpoints at 1915 and 1985.</div>
+    <div class="legend">
+      <span><i class="swl" style="background:var(--ink-3)"></i>observed</span>
+      <span><i class="swl" style="background:var(--s1);height:3px"></i>fitted, three eras</span>
+    </div>
+    <div id="c-sst"></div>
+    <div class="stats" style="margin-top:1.2rem">
+      <div class="stat"><div class="n" id="era1">—</div><div class="l">°C / decade before 1915</div></div>
+      <div class="stat"><div class="n" id="era2">—</div><div class="l">°C / decade 1915–1985</div></div>
+      <div class="stat b"><div class="n" id="era3">—</div><div class="l">°C / decade since 1985</div></div>
+    </div>
+    <figcaption>The warming roughly <b>tripled</b> in the mid-1980s — detectable
+    only because the same places were measured the same way for a very long time, which is exactly
+    what rainfall never got.</figcaption>
+    <div class="src">Source: SPC Pacific Data Hub, <code>SST_ANOM</code>, 21 countries and territories.</div>
+  </figure>
+</section>
+
+<hr class="rule">
+
+<!-- ================= SWING ================= -->
+<section id="swing">
+  <p class="eyebrow">02 — The signal that hurts</p>
+  <h2>Rainfall is the signal that hurts, and it swings</h2>
+  <p>Temperature is the thing the long record measures well, and it is the one every summary of
+  the Pacific reports. Rainfall is the thing people plan around, and it behaves differently. It
+  does not climb — it lurches, and it lurches far harder than the trend ever moves.</p>
+
+  <div class="stats">
+    <div class="stat b"><div class="n" id="ratioN">—</div><div class="l">times further rainfall moves year-to-year than the trend moves in a decade</div></div>
+    <div class="stat"><div class="n" id="jumpN">—</div><div class="l">mm — typical year-to-year movement (median country SD)</div></div>
+    <div class="stat"><div class="n" id="trendN">—</div><div class="l">mm — typical trend per decade (median absolute)</div></div>
+  </div>
+  <p class="note">Rainfall anomalies 1985–2025, the same window as the temperature trend. The
+  denominator is the median <em>absolute</em> per-decade trend: the signed median sits near zero,
+  because some countries are wetting while others dry, which would inflate the ratio to 8.5.</p>
+
+  <figure>
+    <div class="figtitle">Regional rainfall anomaly, 1979–2025</div>
+    <div class="figsub">Hover for a year. Switch to a single country to see how much wilder one place is.</div>
+    <div class="controls">
+      <label class="ctl">Show<select id="rainSel"></select></label>
+      <button class="tblbtn" data-table="t-rain">Table</button>
+    </div>
+    <div id="c-rain"></div>
+    <div class="tblwrap" id="t-rain"></div>
+    <figcaption>Flat-looking averages hide it. Individual countries move by tens of
+    millimetres from one year to the next, in both directions, with no trend to speak of.</figcaption>
+    <div class="src">Source: SPC Pacific Data Hub, <code>RAIN_ANOM</code>, 22 countries and territories.</div>
+  </figure>
+
+  <p>The temperature trend was only measurable because the same places were measured the same way
+  for decades. Rainfall asks for more than that: it moves faster and over shorter distances, so
+  seeing it takes more instruments in more places — and it is the thing the region has fewest
+  instruments for.</p>
+</section>
+
+<!-- ============ SPLIT — continues the same argument, no new number ============ -->
+<section id="split">
+  <p class="eyebrow">02 · continued</p>
+  <p class="lede">The swings are not random, which is what makes them forecastable in principle.
+  In an El Niño, warm water slides east and the rain follows it — so one half of the Pacific is
+  wet while the other is dry.</p>
+  <p>The South Pacific Convergence Zone shifts north-east toward the equator and loses its
+  diagonal shape, so the convection migrates. Islands near the equator gain rain; islands to
+  the south-west lose it. Which side a country falls on is set here from published
+  climatology <em>before</em> looking at the rainfall data — so the split can be tested rather
+  than assumed.</p>
+
+  <figure>
+    <div class="figtitle">Two halves of one ocean</div>
+    <div class="figsub">Mean rainfall anomaly for each side. Shaded band is the 2015–16 El Niño.</div>
+    <div class="legend">
+      <span><i class="swl" style="background:var(--s1)"></i>wetter in El Niño (Kiribati, Tuvalu, Nauru, Tokelau)</span>
+      <span><i class="swl" style="background:var(--s2)"></i>drier in El Niño (8 south-west countries)</span>
+    </div>
+    <div id="c-split"></div>
+    <figcaption>Ten of the 22 countries are left out: the Micronesian
+    states run on a lag, the Cook Islands and French Polynesia flip sign inside one country,
+    Wallis and Futuna has no significant ENSO signal, Pitcairn has no published assessment.
+    <b>Averaging them in would blur the split rather than test it.</b></figcaption>
+    <div class="src">Grouping: Brown et al. (2020) <i>Nature Reviews Earth &amp; Environment</i>;
+    BoM/CSIRO PACCSAP country brochures; Météo-France; NIWA Island Climate Update. Every
+    per-country statement checked against source.</div>
+  </figure>
+
+  <figure>
+    <div class="figtitle">Oceanic Niño Index, 1950–2026</div>
+    <div class="figsub">Above +0.5 is El Niño; below −0.5 is La Niña. Hover for a year.</div>
+    <div id="c-oni"></div>
+    <div class="src">Source: NOAA Climate Prediction Center, ONI annual mean.</div>
+  </figure>
+
+  <div class="pull">So the mechanism is known and the pattern holds. But a farmer does not plant
+  against a pattern for half an ocean. What has to be forecast is how much rain falls in one
+  district, and when it stops — and that can only be answered from the record of that district.</div>
+</section>
+
+<hr class="rule">
+
+<!-- ================= PNG ================= -->
+<section id="png">
+  <p class="eyebrow">03 — The last time it mattered</p>
+  <h2>Papua New Guinea, 2015</h2>
+  <p>The rain began falling away in April 2015. Between mid-July and mid-August, at the one
+  high-altitude research station recording it, temperatures fell to minus two degrees before
+  dawn. The frosts destroyed sweet potato — the staple — in gardens above 2,200 metres, where a
+  replanted crop takes eight to twelve months to mature.</p>
+
+  <div class="stats">
+    <div class="stat b"><div class="n">27</div><div class="l">of 271 rural districts with food very or extremely scarce</div></div>
+    <div class="stat"><div class="n">770k</div><div class="l">people in those districts — an upper limit, the authors stress</div></div>
+    <div class="stat c"><div class="n">88%</div><div class="l">of them in the highlands</div></div>
+    <div class="stat d"><div class="n">0</div><div class="l">official death toll</div></div>
+  </div>
+
+  <figure>
+    <div class="figtitle">How much of the country was actually looked at</div>
+    <div class="figsub">Each square is one of Papua New Guinea's 271 rural districts.</div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--s1)"></i>food supply reported (141)</span>
+      <span><i class="sw" style="border:1px solid var(--s1)"></i>estimated from neighbouring areas and from 1997 (130)</span>
+    </div>
+    <div class="waffle" id="waffle"></div>
+    <figcaption>The only national account was assembled from more than two
+    hundred reports — surveys, emails, phone calls, newspaper stories, photographs posted on
+    Facebook. <b>130 of the 271 districts were never observed, only inferred.</b> Its authors asked
+    for the numbers to be checked in the field. That was not done.</figcaption>
+    <div class="src">Source: Bourke, Allen &amp; Lowe (2016), <i>Estimated impact of drought and
+    frost on food supply in rural PNG in 2015</i>, Development Policy Centre Policy Brief 11, ANU.</div>
+  </figure>
+
+  <figure>
+    <div class="figtitle">The 27 districts</div>
+    <div class="figsub">Hover any district. Larger dot = rating 5, no food available at all.</div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--s1)"></i>very high altitude, 2200–2800 m</span>
+      <span><i class="sw" style="background:#5b8ab0"></i>highlands and highlands fringe</span>
+      <span><i class="sw" style="background:var(--s2)"></i>inland lowland Western Province</span>
+    </div>
+    <div id="c-llga"></div>
+    <button class="tblbtn" data-table="t-llga" style="margin-top:.8rem">Table</button>
+    <div class="tblwrap" id="t-llga"></div>
+    <div class="src">Source: as above, Table 2. Population is the 2015 estimate.</div>
+  </figure>
+
+  <div class="pull">An El Niño declaration is a statement about the ocean. A rainfall forecast
+  for a district is built from what rainfall at that place has done before — so it can only ever
+  be as local as the record behind it.</div>
+
+  <p>The ocean was watched. By early April 2015, forecasters including the Australian Bureau of
+  Meteorology were reporting a severe El Niño moving west. What no one could say was how much
+  rain would fall in the Kandep basin, or when it would stop.</p>
+  <p>The highlands are where most of Papua New Guinea's people live, between roughly 1,500 and
+  2,800 metres. <strong>They are also where almost none of the measurement is.</strong></p>
+  <div class="src">Timeline and mortality: DFAT Office of Development Effectiveness,
+  <i>Evaluation of Australia's response to the PNG El Niño drought and frosts 2015–17</i>.</div>
+</section>
+
+<hr class="rule">
+
+<!-- ================= LAYERS (sticky scrolly) ================= -->
+<section id="layers" class="scrolly">
+  <p class="eyebrow">04 — The framework</p>
+  <h2>Rainfall takes three layers</h2>
+  <p>Rainfall is not one measurement. It takes three, and they do different jobs. Scroll: one of
+  them works, one is thin and misplaced, and one has effectively gone.</p>
+
+  <div class="scrolly-inner">
+    <div class="scrolly-graphic">
+      <svg id="diag" class="diag" viewBox="0 0 460 380" role="img"
+           aria-label="Cross-section of the three observation layers: upper air, ocean surface, and ground.">
+        <!-- upper air -->
+        <g data-band="air">
+          <rect class="band" x="10" y="14" width="440" height="112" rx="10" fill="#199e70" opacity=".16"/>
+          <text class="bandlab" x="26" y="40" fill="#199e70" font-size="13" font-weight="600">UPPER AIR</text>
+          <text class="bandlab" x="26" y="58" fill="#a9bccd" font-size="11.5">radiosondes, twice a day</text>
+          <g class="glyph">
+            <line x1="120" y1="112" x2="126" y2="86" stroke="#199e70" stroke-width="1.4"/>
+            <circle cx="128" cy="78" r="9" fill="none" stroke="#199e70" stroke-width="2"/>
+            <line x1="250" y1="112" x2="256" y2="90" stroke="#199e70" stroke-width="1.4"/>
+            <circle cx="258" cy="82" r="9" fill="none" stroke="#199e70" stroke-width="2"/>
+            <line x1="370" y1="112" x2="376" y2="88" stroke="#199e70" stroke-width="1.4"/>
+            <circle cx="378" cy="80" r="9" fill="none" stroke="#199e70" stroke-width="2"/>
+          </g>
+        </g>
+        <!-- ocean -->
+        <g data-band="sea">
+          <rect class="band" x="10" y="134" width="440" height="106" rx="10" fill="#3987e5" opacity=".16"/>
+          <text class="bandlab" x="26" y="160" fill="#3987e5" font-size="13" font-weight="600">OCEAN SURFACE</text>
+          <text class="bandlab" x="26" y="178" fill="#a9bccd" font-size="11.5">moorings, ships, drifters</text>
+          <g class="glyph">
+            <path d="M18 214 q22 -9 44 0 t44 0 t44 0 t44 0 t44 0 t44 0 t44 0 t44 0 t44 0"
+                  fill="none" stroke="#3987e5" stroke-width="1.6" opacity=".8"/>
+            <circle cx="96" cy="210" r="5.5" fill="#3987e5"/><circle cx="200" cy="212" r="5.5" fill="#3987e5"/>
+            <circle cx="300" cy="210" r="5.5" fill="#3987e5"/><circle cx="392" cy="212" r="5.5" fill="#3987e5"/>
+            <line x1="96" y1="210" x2="96" y2="232" stroke="#3987e5" stroke-width="1.2"/>
+            <line x1="300" y1="210" x2="300" y2="232" stroke="#3987e5" stroke-width="1.2"/>
+          </g>
+        </g>
+        <!-- ground -->
+        <g data-band="gnd">
+          <rect class="band" x="10" y="248" width="440" height="118" rx="10" fill="#d95926" opacity=".16"/>
+          <text class="bandlab" x="26" y="274" fill="#d95926" font-size="13" font-weight="600">GROUND</text>
+          <text class="bandlab" x="26" y="292" fill="#a9bccd" font-size="11.5">rain gauges</text>
+          <g class="glyph">
+            <path d="M14 352 l70 -14 l52 12 l60 -20 l70 16 l54 -10 l66 14" fill="none"
+                  stroke="#d95926" stroke-width="1.8" opacity=".55"/>
+            <path d="M180 340 l38 -34 l40 34" fill="none" stroke="#d95926" stroke-width="1.6" opacity=".45"/>
+            <g><rect x="62" y="332" width="7" height="14" rx="1.5" fill="#d95926"/>
+               <line x1="65.5" y1="332" x2="65.5" y2="324" stroke="#d95926" stroke-width="1.4"/></g>
+            <g><rect x="392" y="336" width="7" height="14" rx="1.5" fill="#d95926"/>
+               <line x1="395.5" y1="336" x2="395.5" y2="328" stroke="#d95926" stroke-width="1.4"/></g>
+            <text x="222" y="300" fill="#e66767" font-size="10.5" text-anchor="middle">nothing up here</text>
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <div class="scrolly-steps">
+      <div class="step" data-layer="air">
+        <div class="stepnum">The upper air</div>
+        <h3>It steers the rain</h3>
+        <p>Radiosondes rise twice a day and read temperature, humidity and wind through the whole
+        depth of the atmosphere. That is what tells a forecaster where the convection is going over
+        the next few days — the difference between knowing an El Niño is running and knowing which
+        valley gets the rain.</p>
+        <p>Across the Pacific there were <strong id="d-peak">—</strong> sounding sites at the 1979
+        peak. There are <strong id="d-now">—</strong> now.</p>
+        <div class="verdict">almost gone</div>
+      </div>
+      <div class="step" data-layer="sea">
+        <div class="stepnum">The ocean surface</div>
+        <h3>It fuels the rain</h3>
+        <p>Moored buoys along the equator, ships on the shipping lanes, drifters in between. They
+        show where the warm water and the moisture sit, weeks to seasons ahead. This is the layer
+        the El Niño forecast is built on.</p>
+        <p><strong id="d-mar">—</strong> platforms reported in the tropical Pacific in July 2026, and
+        <strong id="d-marpct">—</strong> sat within 1 hPa of the model — against
+        <strong id="d-marglb">—</strong> globally.</p>
+        <div class="verdict">working</div>
+      </div>
+      <div class="step" data-layer="gnd">
+        <div class="stepnum">The ground</div>
+        <h3>It records what arrived</h3>
+        <p>Rain gauges measure what actually fell. They are what every satellite estimate is
+        calibrated against, and what any local forecast has to be built from — you cannot say what
+        an El Niño means for a district without decades of rainfall measured in that district.</p>
+        <p>Papua New Guinea's highest gauge sits at <strong id="d-elev">—</strong> metres, in a
+        country with peaks above 4,000.</p>
+        <div class="verdict">thin, misplaced, half-silent</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= OCEAN ================= -->
+<section id="ocean">
+  <p class="eyebrow">04 · The ocean layer</p>
+  <h2>The ocean layer works</h2>
+  <div class="stats">
+    <div class="stat a"><div class="n" id="marPac">—</div><div class="l">platforms reporting in the tropical Pacific, July 2026</div></div>
+    <div class="stat c"><div class="n" id="marPct">—</div><div class="l">within 1 hPa of the forecast model</div></div>
+    <div class="stat"><div class="n" id="marGlb">—</div><div class="l">the same figure globally</div></div>
+  </div>
+  <figure>
+    <div class="figtitle">Where the ocean is watched</div>
+    <div class="figsub">Each dot is a marine platform. Colour is how closely it agrees with the model.</div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--s3)"></i>within 1 hPa</span>
+      <span><i class="sw" style="background:var(--warn)"></i>1–2 hPa</span>
+      <span><i class="sw" style="background:var(--bad)"></i>over 2 hPa</span>
+    </div>
+    <div id="c-marine"></div>
+    <figcaption>The ocean around these islands is <b>better observed
+    than the ocean on average</b>. Almost none of it is paid for or run from within the region —
+    which matters for how long that lasts, not for whether the data exists today. It does.</figcaption>
+    <div class="src">Source: WMO WIGOS Data Quality Monitoring System, marine surface quality,
+    July 2026. <a href="https://wdqms.wmo.int/">wdqms.wmo.int</a></div>
+  </figure>
+</section>
+
+<hr class="rule">
+
+<!-- ================= GROUND ================= -->
+<section id="ground">
+  <p class="eyebrow">04 · The ground layer</p>
+  <h2>The ground layer is at sea level, and half of it is silent</h2>
+  <div class="stats">
+    <div class="stat b"><div class="n" id="pngHigh">—</div><div class="l">metres — the highest rain gauge in the country</div></div>
+    <div class="stat"><div class="n" id="pngActive">—</div><div class="l">gauges still reporting, of <span id="pngEver">—</span> ever</div></div>
+    <div class="stat d"><div class="n">0</div><div class="l">have ever been placed above 1,000 m</div></div>
+  </div>
+  <figure>
+    <div class="figtitle">Gauge elevation against where the drought bit</div>
+    <div class="figsub">Internationally exchanged rain gauges. The band is 1,500–2,800 m, where the frosts hit.</div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--s1)"></i>still reporting</span>
+      <span><i class="sw" style="background:var(--ink-3)"></i>stopped</span>
+      <span><i class="sw" style="background:rgba(230,103,103,.25);border:1px solid var(--bad)"></i>the drought zone</span>
+    </div>
+    <div id="c-elev"></div>
+    <button class="tblbtn" data-table="t-elev" style="margin-top:.8rem">Table</button>
+    <div class="tblwrap" id="t-elev"></div>
+    <figcaption>Peaks above 4,000 metres; nothing in the
+    internationally exchanged rainfall record above <b id="pngHigh2">—</b> metres. These gauges are
+    on the coast because that is where the airports are. <b>The WMO register tells a different
+    story.</b></figcaption>
+    <div class="src">Source: NOAA GHCN-Daily inventory, PRCP element — stations exchanged
+    internationally. PNG may hold highland records that never leave the country, but the forecast
+    centres and global models draw on the exchanged set.</div>
+  </figure>
+
+  <p class="lede">The highland stations do exist. They are simply not switched on.</p>
+
+  <div class="stats">
+    <div class="stat b"><div class="n" id="pngSurfPct">—</div><div class="l">of Papua New Guinea's expected surface observations arrived in July 2026</div></div>
+    <div class="stat d"><div class="n" id="pngSilent">—</div><div class="l">of its <span id="pngReg">—</span> registered surface stations sent nothing at all</div></div>
+    <div class="stat"><div class="n" id="pngRep">—</div><div class="l">was reporting normally</div></div>
+  </div>
+
+  <figure>
+    <div class="figtitle">Registered, counted, and silent</div>
+    <div class="figsub">Every Papua New Guinea surface station on the WMO register, and what it sent in July 2026.</div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--s3)"></i>reporting</span>
+      <span><i class="sw" style="background:var(--warn)"></i>partial</span>
+      <span><i class="sw" style="background:var(--bad)"></i>nothing received</span>
+    </div>
+    <div id="c-pngland"></div>
+    <button class="tblbtn" data-table="t-pngland" style="margin-top:.8rem">Table</button>
+    <div class="tblwrap" id="t-pngland"></div>
+    <figcaption><b>Goroka</b> and <b>Mendi North</b> are both in the
+    highlands provinces the drought hit hardest. Goroka returned 0 of 403 expected observations
+    that month; Mendi North, 0 of 248. <b>Not missing — registered, counted, and included in every
+    tally of how well observed the country is.</b></figcaption>
+    <div class="src">Source: WMO WIGOS Data Quality Monitoring System, land surface availability,
+    July 2026. <a href="https://wdqms.wmo.int/">wdqms.wmo.int</a></div>
+  </figure>
+
+  <figure>
+    <div class="figtitle">Few gauges, spread across a great deal of ocean</div>
+    <div class="figsub">Hover a country. Up = gauges still reporting; across = distance between the furthest two.</div>
+    <div id="c-disp"></div>
+    <button class="tblbtn" data-table="t-disp" style="margin-top:.8rem">Table</button>
+    <div class="tblwrap" id="t-disp"></div>
+    <figcaption>Land area is the wrong denominator — a country is
+    not a tile, it is a set of places, and the gap between them is what a gauge cannot cross.
+    Kiribati's two gauges sit thousands of kilometres apart. <b>Where there is no gauge, the
+    satellite estimate goes uncalibrated and no forecast can be checked against what fell.</b></figcaption>
+    <div class="src">Source: GHCN-Daily. Great-circle distance between the two furthest active gauges.</div>
+  </figure>
+
+  <figure>
+    <div class="figtitle">Against the international standard, the ground layer mostly passes</div>
+    <div class="figsub">Stations per million km² of exclusive economic zone. Dashed line is the GBON requirement for small island states.</div>
+    <div id="c-gbon"></div>
+    <button class="tblbtn" data-table="t-gbon" style="margin-top:.8rem">Table</button>
+    <div class="tblwrap" id="t-gbon"></div>
+    <figcaption>Tuvalu is 26 km² of land, so one gauge satisfies 500 km
+    spacing thousands of times over. <b>Compliant, and almost meaningless</b> — the spacing was set
+    for the pressure field, which is smooth and continental. Rainfall is neither. Countries sit
+    high here because their ocean is small, not their network large.</figcaption>
+    <div class="src">Standard: WMO <i>GBON Baseline 2023</i>, INF 6.2 to the Sixth SOFF Steering
+    Committee — 200 km surface spacing, relaxed to 500 km for Small Island States, i.e. 4 stations
+    per million km². Areas: Marine Regions EEZ v4.</div>
+  </figure>
+</section>
+
+<hr class="rule">
+
+<!-- ================= AIR ================= -->
+<section id="air">
+  <p class="eyebrow">04 · The upper-air layer</p>
+  <h2>The layer that steers the forecast has gone</h2>
+  <div class="stats">
+    <div class="stat"><div class="n" id="sondePeak">—</div><div class="l">radiosonde sites across the Pacific at the 1979 peak</div></div>
+    <div class="stat d"><div class="n" id="sondeNow">—</div><div class="l">still operating in 2026</div></div>
+    <div class="stat b"><div class="n">2015</div><div class="l">Papua New Guinea's last sounding — the year of the drought</div></div>
+  </div>
+  <figure>
+    <div class="figtitle">Pacific radiosonde sites, 1950–2026</div>
+    <div class="figsub">Sites with soundings in each year. Hover for a count.</div>
+    <div id="c-sonde"></div>
+    <figcaption>Every launch costs a balloon, gas and a sonde. Upper-air
+    observation is not installed — it is paid for twice a day, forever, with trained staff. So it
+    is the first thing cut when a programme ends, and <b>its ending produces no visible event</b>:
+    the forecast keeps arriving, interpolated from whatever is nearest.</figcaption>
+    <div class="src">Source: NOAA Integrated Global Radiosonde Archive (IGRA) v2 station list.</div>
+  </figure>
+  <p><strong id="neverList">—</strong> never had one at all.</p>
+</section>
+
+<hr class="rule">
+
+<!-- ================= SILENT ================= -->
+<section id="silent">
+  <p class="eyebrow">05 — Why</p>
+  <h2>Existing is not reporting, and who pays decides which</h2>
+  <p>A station in the register is not a station sending data. WMO monitors both, and the gap
+  between them is where the network quietly stopped. Under GBON a station counts as compliant
+  when it delivered 80% of required reports on at least 80% of days in the month.</p>
+  <p>Papua New Guinea is registered for upper-air observation and received
+  <strong id="pngUpper">—</strong> of <strong id="pngUpperExp">—</strong> expected soundings in
+  July 2026. Solomon Islands and Tuvalu are also registered, and also sent nothing. The obligation
+  is on the books. The balloons are not going up.</p>
+  <p class="lede">The two layers also come apart <em>inside the same country</em> — and that is the
+  tell.</p>
+  <figure>
+    <div class="figtitle">The layer somebody else pays for is the layer that works</div>
+    <div class="figsub">Observations received against expected, July 2026. Hover any country.</div>
+    <div class="legend">
+      <span><i class="swl" style="background:var(--ink-3);height:1px"></i>both layers equal</span>
+      <span><i class="sw" style="background:var(--s1)"></i>Pacific island country or territory</span>
+    </div>
+    <div id="c-diverge"></div>
+    <button class="tblbtn" data-table="t-diverge" style="margin-top:.8rem">Table</button>
+    <div class="tblwrap" id="t-diverge"></div>
+    <figcaption>The radiosonde programme in the freely associated states is
+    funded through the US National Weather Service. The surface network is national.
+    <b>Where an outside programme carries the recurring cost, the data arrives.</b> Papua New
+    Guinea funds both itself, and sits at the bottom of both axes.</figcaption>
+    <div class="src">Source: WMO WIGOS Data Quality Monitoring System, land surface and upper-air
+    availability, July 2026. Metadata-fault categories (grey, yellow) excluded from every rate.</div>
+  </figure>
+  <p>This is also what makes the gap easy to miss. Every silent station is still counted — in the
+  register, in the network totals, and in any assessment built on how many stations a country has.
+  On paper the region is better observed than it was thirty years ago.</p>
+</section>
+
+<hr class="rule">
+
+<!-- ================= CLOSE ================= -->
+<section id="close">
+  <p class="eyebrow">06 — Close</p>
+  <h2>The gap is administrative, not natural</h2>
+  <p>The same logic decides what <em>is</em> watched. Tide gauges and rain gauges belong to
+  different programmes, on different funding cycles, answering to different agencies.</p>
+  <figure>
+    <div class="figtitle">Every country here measures sea level. Two have no weather station.</div>
+    <div class="figsub">Countries holding a sea level record, by how many weather stations still report.</div>
+    <div id="c-watch"></div>
+    <figcaption>A country can hold a thirty-year sea level record and no current rainfall record
+    because two donors made two decisions a decade apart. <b>Which makes this fixable — a question
+    of which line items have a funder, not a fact about small islands.</b></figcaption>
+    <div class="src">Sources: SPC Pacific Data Hub <code>SEA_LVL</code> and
+    <code>METEO_MONITOR_NET</code>. Four more sea level countries — Guam, American Samoa, Northern
+    Mariana Islands, Wallis and Futuna — are absent from the station indicator.</div>
+  </figure>
+  <div class="pull">Everything that would show the rain coming has been switched off, one station
+  at a time — and much of what remains is registered, counted, and silent.</div>
+  <p class="lede">You cannot prepare for what you cannot watch arriving. The next El Niño will be
+  forecast from the ocean, accurately, months ahead. Nobody will be able to say what it means for
+  a valley in Enga.</p>
+</section>
+
+<footer>
+  <p style="max-width:74ch">Built for the <a href="https://pacificdatavizchallenge.org/">Pacific Data Viz
+  Challenge</a>. All figures computed from the source data listed under each chart — SPC Pacific Data
+  Hub, NOAA GHCN-Daily and IGRA v2, WMO WIGOS Data Quality Monitoring System, NOAA CPC, Marine Regions,
+  and ANU Development Policy Centre Policy Brief 11.</p>
+  <p class="src">Every chart has a keyboard-reachable table view where one is meaningful. Colours
+  validated for deuteranopia, protanopia and tritanopia against the page surface.</p>
+</footer>
+</main>
+
+<script>
+const D = {"sst":{"American Samoa":{"1850":0.0,"1851":-0.3,"1852":0.0,"1853":0.4,"1854":0.2,"1855":-0.3,"1856":-0.1,"1857":-0.5,"1858":-0.2,"1859":0.2,"1860":-0.2,"1861":-0.5,"1862":-0.4,"1863":-0.4,"1864":-0.2,"1865":-0.2,"1866":-0.3,"1867":-0.2,"1868":-0.1,"1869":-0.1,"1870":-0.2,"1871":0.1,"1872":0.1,"1873":-0.4,"1874":0.0,"1875":-0.1,"1876":-0.1,"1877":-0.2,"1878":-0.2,"1879":-0.2,"1880":-0.2,"1881":0.1,"1882":0.1,"1883":-0.4,"1884":-0.4,"1885":-0.6,"1886":-0.5,"1887":-0.4,"1888":-0.2,"1889":-0.1,"1890":-0.5,"1891":-0.4,"1892":-0.3,"1893":-0.7,"1894":-0.3,"1895":-0.2,"1896":-0.4,"1897":-0.2,"1898":-0.2,"1899":-0.1,"1900":0.1,"1901":0.2,"1902":-0.4,"1903":-0.2,"1904":-0.6,"1905":-0.5,"1906":-0.1,"1907":-0.4,"1908":-0.5,"1909":-0.7,"1910":-0.7,"1911":-0.6,"1912":-0.3,"1913":-0.5,"1914":-0.3,"1915":-0.1,"1916":-0.2,"1917":-0.8,"1918":-0.5,"1919":-0.8,"1920":-0.5,"1921":-0.4,"1922":-0.1,"1923":-0.4,"1924":-0.1,"1925":-0.3,"1926":-0.3,"1927":-0.3,"1928":-0.2,"1929":-0.3,"1930":-0.4,"1931":-0.3,"1932":-0.1,"1933":-0.5,"1934":-0.4,"1935":-0.4,"1936":-0.2,"1937":-0.3,"1938":-0.4,"1939":-0.5,"1940":-0.1,"1941":0.1,"1942":0.1,"1943":0.1,"1944":0.2,"1945":0.1,"1946":0.2,"1947":0.2,"1948":-0.2,"1949":-0.2,"1950":-0.2,"1951":-0.1,"1952":0.2,"1953":0.1,"1954":0.0,"1955":-0.3,"1956":-0.3,"1957":-0.1,"1958":0.0,"1959":0.1,"1960":0.0,"1961":0.0,"1962":-0.1,"1963":0.0,"1964":-0.1,"1965":-0.3,"1966":0.0,"1967":-0.2,"1968":0.0,"1969":0.2,"1970":0.1,"1971":-0.2,"1972":-0.2,"1973":0.2,"1974":-0.3,"1975":-0.3,"1976":-0.3,"1977":-0.1,"1978":0.0,"1979":-0.1,"1980":0.1,"1981":-0.1,"1982":0.0,"1983":-0.3,"1984":0.0,"1985":-0.2,"1986":-0.1,"1987":-0.1,"1988":0.1,"1989":-0.1,"1990":0.0,"1991":0.3,"1992":0.2,"1993":0.1,"1994":0.2,"1995":0.3,"1996":0.2,"1997":-0.1,"1998":-0.2,"1999":0.1,"2000":0.3,"2001":0.2,"2002":0.4,"2003":0.5,"2004":0.6,"2005":0.6,"2006":0.5,"2007":0.5,"2008":0.1,"2009":0.4,"2010":0.5,"2011":0.1,"2012":0.4,"2013":0.5,"2014":0.6,"2015":0.3,"2016":0.6,"2017":0.7,"2018":0.6,"2019":0.7,"2020":0.7,"2021":0.4,"2022":0.4,"2023":0.5,"2024":0.7,"2025":0.5},"Micronesia, Federated State of":{"1850":0.0,"1851":0.1,"1852":0.0,"1853":-0.1,"1854":-0.2,"1855":-0.4,"1856":-0.3,"1857":0.0,"1858":-0.5,"1859":0.1,"1860":-0.3,"1861":-0.8,"1862":-0.4,"1863":-0.2,"1864":0.0,"1865":0.0,"1866":0.0,"1867":-0.2,"1868":-0.2,"1869":0.2,"1870":-0.1,"1871":-0.2,"1872":-0.1,"1873":0.0,"1874":-0.1,"1875":-0.3,"1876":-0.1,"1877":-0.2,"1878":0.0,"1879":-0.2,"1880":-0.4,"1881":0.1,"1882":0.1,"1883":-0.4,"1884":-0.6,"1885":-0.6,"1886":-0.3,"1887":0.0,"1888":-0.2,"1889":-0.1,"1890":0.1,"1891":0.3,"1892":0.1,"1893":0.0,"1894":0.0,"1895":0.0,"1896":-0.1,"1897":0.2,"1898":-0.1,"1899":-0.3,"1900":0.0,"1901":-0.1,"1902":-0.5,"1903":-0.5,"1904":-0.6,"1905":-0.7,"1906":-0.6,"1907":-0.3,"1908":-0.4,"1909":-0.5,"1910":-0.4,"1911":-0.7,"1912":-0.7,"1913":-0.7,"1914":-0.6,"1915":-0.4,"1916":-0.4,"1917":-0.8,"1918":-0.8,"1919":-1.0,"1920":-0.7,"1921":-0.2,"1922":-0.1,"1923":-0.4,"1924":-0.3,"1925":-0.2,"1926":-0.3,"1927":-0.3,"1928":-0.4,"1929":-0.4,"1930":-0.5,"1931":-0.3,"1932":-0.5,"1933":-0.5,"1934":-0.4,"1935":-0.4,"1936":-0.4,"1937":-0.3,"1938":-0.4,"1939":-0.3,"1940":-0.4,"1941":-0.3,"1942":-0.3,"1943":0.3,"1944":0.2,"1945":0.2,"1946":0.2,"1947":-0.1,"1948":-0.3,"1949":-0.4,"1950":-0.2,"1951":-0.2,"1952":-0.3,"1953":-0.2,"1954":-0.2,"1955":-0.4,"1956":-0.2,"1957":-0.3,"1958":-0.4,"1959":-0.3,"1960":-0.2,"1961":-0.2,"1962":-0.1,"1963":0.0,"1964":-0.1,"1965":-0.4,"1966":-0.3,"1967":-0.2,"1968":-0.1,"1969":0.0,"1970":0.0,"1971":-0.2,"1972":-0.5,"1973":-0.2,"1974":-0.2,"1975":-0.3,"1976":-0.3,"1977":-0.2,"1978":-0.1,"1979":-0.1,"1980":-0.1,"1981":0.1,"1982":-0.1,"1983":-0.2,"1984":0.1,"1985":0.0,"1986":0.0,"1987":-0.1,"1988":0.2,"1989":0.1,"1990":0.0,"1991":-0.1,"1992":-0.3,"1993":-0.4,"1994":0.0,"1995":0.3,"1996":0.4,"1997":0.0,"1998":0.1,"1999":0.2,"2000":0.2,"2001":0.4,"2002":0.3,"2003":0.4,"2004":0.3,"2005":0.3,"2006":0.3,"2007":0.4,"2008":0.3,"2009":0.4,"2010":0.4,"2011":0.4,"2012":0.4,"2013":0.5,"2014":0.6,"2015":0.3,"2016":0.6,"2017":0.7,"2018":0.6,"2019":0.5,"2020":0.7,"2021":0.7,"2022":0.6,"2023":0.7,"2024":0.8,"2025":0.9},"Samoa":{"1850":0.1,"1851":-0.3,"1852":0.0,"1853":0.3,"1854":0.1,"1855":-0.2,"1856":-0.2,"1857":-0.5,"1858":-0.2,"1859":0.1,"1860":-0.3,"1861":-0.5,"1862":-0.4,"1863":-0.4,"1864":-0.3,"1865":-0.3,"1866":-0.3,"1867":-0.2,"1868":-0.2,"1869":-0.1,"1870":-0.4,"1871":-0.1,"1872":-0.1,"1873":-0.4,"1874":-0.1,"1875":-0.2,"1876":-0.2,"1877":-0.2,"1878":-0.2,"1879":-0.3,"1880":-0.3,"1881":0.1,"1882":0.0,"1883":-0.4,"1884":-0.4,"1885":-0.5,"1886":-0.4,"1887":-0.4,"1888":-0.2,"1889":-0.2,"1890":-0.5,"1891":-0.4,"1892":-0.3,"1893":-0.7,"1894":-0.3,"1895":-0.2,"1896":-0.3,"1897":-0.2,"1898":-0.3,"1899":-0.2,"1900":0.2,"1901":0.1,"1902":-0.4,"1903":-0.2,"1904":-0.6,"1905":-0.4,"1906":-0.3,"1907":-0.4,"1908":-0.5,"1909":-0.8,"1910":-0.9,"1911":-0.6,"1912":-0.3,"1913":-0.5,"1914":-0.3,"1915":-0.2,"1916":-0.5,"1917":-1.0,"1918":-0.6,"1919":-0.9,"1920":-0.5,"1921":-0.5,"1922":-0.2,"1923":-0.4,"1924":-0.2,"1925":-0.3,"1926":-0.2,"1927":-0.3,"1928":-0.3,"1929":-0.3,"1930":-0.3,"1931":-0.3,"1932":-0.2,"1933":-0.6,"1934":-0.4,"1935":-0.4,"1936":-0.3,"1937":-0.3,"1938":-0.4,"1939":-0.6,"1940":-0.1,"1941":0.1,"1942":0.0,"1943":0.0,"1944":0.1,"1945":0.1,"1946":0.2,"1947":0.1,"1948":-0.2,"1949":-0.2,"1950":-0.3,"1951":-0.1,"1952":0.1,"1953":0.1,"1954":-0.1,"1955":-0.4,"1956":-0.4,"1957":-0.2,"1958":0.0,"1959":0.1,"1960":-0.1,"1961":0.0,"1962":-0.1,"1963":0.0,"1964":-0.2,"1965":-0.3,"1966":0.0,"1967":-0.3,"1968":-0.1,"1969":0.2,"1970":0.0,"1971":-0.3,"1972":-0.2,"1973":0.1,"1974":-0.4,"1975":-0.4,"1976":-0.4,"1977":0.0,"1978":0.0,"1979":0.0,"1980":0.2,"1981":-0.1,"1982":0.0,"1983":-0.2,"1984":0.0,"1985":-0.2,"1986":0.0,"1987":0.0,"1988":0.1,"1989":-0.2,"1990":0.1,"1991":0.4,"1992":0.2,"1993":0.1,"1994":0.3,"1995":0.3,"1996":0.1,"1997":-0.1,"1998":-0.2,"1999":0.0,"2000":0.2,"2001":0.2,"2002":0.4,"2003":0.5,"2004":0.5,"2005":0.6,"2006":0.5,"2007":0.5,"2008":0.1,"2009":0.4,"2010":0.4,"2011":0.0,"2012":0.4,"2013":0.5,"2014":0.6,"2015":0.5,"2016":0.6,"2017":0.6,"2018":0.6,"2019":0.7,"2020":0.6,"2021":0.4,"2022":0.3,"2023":0.6,"2024":0.8,"2025":0.5},"Papua New Guinea":{"1850":0.0,"1851":0.3,"1852":0.1,"1853":0.0,"1854":-0.3,"1855":-0.5,"1856":-0.4,"1857":0.0,"1858":-0.4,"1859":0.1,"1860":-0.3,"1861":-1.0,"1862":-0.4,"1863":-0.2,"1864":0.2,"1865":0.0,"1866":0.0,"1867":-0.2,"1868":-0.3,"1869":0.2,"1870":-0.1,"1871":-0.1,"1872":-0.1,"1873":-0.1,"1874":0.1,"1875":-0.1,"1876":-0.1,"1877":-0.3,"1878":0.2,"1879":-0.1,"1880":-0.2,"1881":0.2,"1882":0.1,"1883":-0.5,"1884":-0.7,"1885":-0.9,"1886":-0.4,"1887":-0.2,"1888":-0.5,"1889":-0.1,"1890":0.0,"1891":0.0,"1892":0.0,"1893":0.0,"1894":-0.2,"1895":-0.3,"1896":-0.3,"1897":0.0,"1898":-0.4,"1899":-0.5,"1900":0.0,"1901":-0.5,"1902":-1.1,"1903":-0.8,"1904":-0.9,"1905":-1.0,"1906":-0.7,"1907":-0.3,"1908":-0.3,"1909":-0.4,"1910":-0.3,"1911":-0.9,"1912":-0.7,"1913":-0.7,"1914":-0.8,"1915":-0.5,"1916":-0.3,"1917":-0.8,"1918":-0.9,"1919":-1.2,"1920":-0.8,"1921":-0.2,"1922":-0.2,"1923":-0.5,"1924":-0.3,"1925":-0.5,"1926":-0.5,"1927":-0.4,"1928":-0.4,"1929":-0.6,"1930":-0.6,"1931":-0.3,"1932":-0.6,"1933":-0.4,"1934":-0.4,"1935":-0.5,"1936":-0.4,"1937":-0.4,"1938":-0.3,"1939":-0.5,"1940":-0.6,"1941":-0.6,"1942":-0.2,"1943":0.3,"1944":0.1,"1945":0.2,"1946":-0.2,"1947":-0.5,"1948":-0.6,"1949":-0.8,"1950":-0.3,"1951":-0.5,"1952":-0.5,"1953":-0.5,"1954":-0.4,"1955":-0.5,"1956":-0.1,"1957":-0.5,"1958":-0.5,"1959":-0.5,"1960":-0.3,"1961":-0.3,"1962":0.0,"1963":-0.1,"1964":-0.1,"1965":-0.8,"1966":-0.5,"1967":-0.3,"1968":-0.1,"1969":0.0,"1970":0.1,"1971":-0.1,"1972":-0.5,"1973":0.0,"1974":-0.1,"1975":-0.2,"1976":-0.3,"1977":-0.2,"1978":0.0,"1979":-0.1,"1980":-0.2,"1981":0.1,"1982":-0.4,"1983":-0.2,"1984":0.0,"1985":0.0,"1986":0.0,"1987":-0.3,"1988":0.2,"1989":0.2,"1990":0.0,"1991":-0.1,"1992":-0.4,"1993":-0.6,"1994":-0.1,"1995":0.3,"1996":0.5,"1997":-0.2,"1998":0.4,"1999":0.2,"2000":0.3,"2001":0.4,"2002":0.3,"2003":0.4,"2004":0.3,"2005":0.4,"2006":0.2,"2007":0.5,"2008":0.3,"2009":0.4,"2010":0.6,"2011":0.4,"2012":0.3,"2013":0.4,"2014":0.3,"2015":0.1,"2016":0.7,"2017":0.7,"2018":0.5,"2019":0.3,"2020":0.8,"2021":0.6,"2022":0.8,"2023":0.6,"2024":0.9,"2025":1.1},"Palau":{"1850":0.0,"1851":0.1,"1852":0.1,"1853":0.1,"1854":0.2,"1855":-0.5,"1856":0.0,"1857":-0.1,"1858":-0.6,"1859":0.1,"1860":-0.1,"1861":-0.7,"1862":-0.7,"1863":-0.1,"1864":-0.1,"1865":0.0,"1866":0.0,"1867":-0.2,"1868":-0.2,"1869":0.3,"1870":0.2,"1871":-0.1,"1872":0.1,"1873":0.2,"1874":0.0,"1875":-0.2,"1876":0.0,"1877":0.0,"1878":0.4,"1879":0.1,"1880":-0.2,"1881":-0.1,"1882":0.0,"1883":-0.6,"1884":-0.9,"1885":-0.5,"1886":-0.1,"1887":0.1,"1888":-0.1,"1889":0.3,"1890":0.2,"1891":0.2,"1892":0.1,"1893":-0.1,"1894":-0.2,"1895":-0.1,"1896":-0.3,"1897":0.3,"1898":-0.1,"1899":-0.4,"1900":0.0,"1901":-0.4,"1902":-0.6,"1903":-0.5,"1904":-0.7,"1905":-0.8,"1906":-0.5,"1907":-0.5,"1908":-0.3,"1909":-0.4,"1910":-0.3,"1911":-0.7,"1912":-0.8,"1913":-0.8,"1914":-0.6,"1915":-0.3,"1916":-0.3,"1917":-0.3,"1918":-1.0,"1919":-0.8,"1920":-0.7,"1921":-0.1,"1922":-0.2,"1923":-0.5,"1924":-0.4,"1925":-0.3,"1926":-0.5,"1927":-0.2,"1928":-0.4,"1929":-0.6,"1930":-0.6,"1931":-0.3,"1932":-0.5,"1933":-0.4,"1934":-0.4,"1935":-0.6,"1936":-0.5,"1937":-0.3,"1938":-0.3,"1939":-0.3,"1940":-0.5,"1941":-0.4,"1942":-0.2,"1943":0.0,"1944":0.1,"1945":0.3,"1946":0.1,"1947":-0.2,"1948":-0.4,"1949":-0.5,"1950":-0.2,"1951":-0.3,"1952":-0.4,"1953":-0.2,"1954":-0.1,"1955":-0.3,"1956":-0.3,"1957":-0.2,"1958":-0.5,"1959":-0.4,"1960":-0.1,"1961":-0.3,"1962":-0.3,"1963":-0.3,"1964":-0.1,"1965":-0.5,"1966":-0.4,"1967":-0.5,"1968":-0.3,"1969":-0.2,"1970":0.0,"1971":-0.2,"1972":-0.4,"1973":-0.1,"1974":-0.2,"1975":-0.2,"1976":-0.4,"1977":-0.3,"1978":-0.1,"1979":-0.2,"1980":-0.3,"1981":0.1,"1982":-0.2,"1983":-0.2,"1984":0.0,"1985":0.0,"1986":-0.1,"1987":-0.1,"1988":0.3,"1989":0.2,"1990":-0.2,"1991":-0.4,"1992":-0.3,"1993":-0.4,"1994":-0.1,"1995":0.2,"1996":0.3,"1997":0.0,"1998":0.4,"1999":0.3,"2000":0.3,"2001":0.3,"2002":0.1,"2003":0.1,"2004":0.0,"2005":0.2,"2006":0.1,"2007":0.2,"2008":0.2,"2009":0.3,"2010":0.6,"2011":0.4,"2012":0.4,"2013":0.6,"2014":0.5,"2015":0.2,"2016":0.6,"2017":0.7,"2018":0.5,"2019":0.3,"2020":0.7,"2021":0.8,"2022":0.8,"2023":0.7,"2024":0.8,"2025":0.9},"Niue":{"1850":-0.2,"1851":-0.4,"1852":0.0,"1853":0.6,"1854":0.3,"1855":-0.2,"1856":-0.1,"1857":-0.2,"1858":-0.2,"1859":0.3,"1860":0.1,"1861":-0.1,"1862":-0.1,"1863":-0.1,"1864":0.1,"1865":0.0,"1866":0.0,"1867":0.1,"1868":0.2,"1869":0.1,"1870":0.2,"1871":0.5,"1872":0.4,"1873":0.0,"1874":0.4,"1875":0.4,"1876":0.3,"1877":-0.3,"1878":-0.2,"1879":0.3,"1880":0.1,"1881":0.0,"1882":0.2,"1883":-0.4,"1884":-0.7,"1885":-0.9,"1886":-0.5,"1887":-0.3,"1888":-0.6,"1889":-0.2,"1890":-0.1,"1891":-0.3,"1892":-0.2,"1893":-0.2,"1894":-0.2,"1895":-0.1,"1896":-0.6,"1897":-0.5,"1898":0.1,"1899":0.0,"1900":-0.5,"1901":0.3,"1902":-0.8,"1903":-0.4,"1904":-0.5,"1905":-1.0,"1906":-0.1,"1907":-0.6,"1908":-0.6,"1909":-0.6,"1910":-0.3,"1911":-0.5,"1912":-0.5,"1913":-0.5,"1914":-0.4,"1915":-0.1,"1916":0.3,"1917":-0.1,"1918":-0.4,"1919":-0.9,"1920":-0.5,"1921":-0.5,"1922":-0.1,"1923":-0.4,"1924":0.0,"1925":-0.3,"1926":-0.6,"1927":-0.2,"1928":-0.4,"1929":-0.4,"1930":-0.7,"1931":-0.6,"1932":-0.2,"1933":-0.5,"1934":-0.4,"1935":-0.3,"1936":-0.2,"1937":-0.2,"1938":-0.1,"1939":-0.4,"1940":-0.5,"1941":-0.2,"1942":0.1,"1943":0.5,"1944":0.4,"1945":0.1,"1946":0.2,"1947":0.1,"1948":-0.3,"1949":-0.1,"1950":0.2,"1951":0.0,"1952":0.3,"1953":0.1,"1954":0.0,"1955":0.0,"1956":0.1,"1957":-0.2,"1958":-0.3,"1959":-0.1,"1960":0.0,"1961":0.1,"1962":-0.1,"1963":-0.1,"1964":0.0,"1965":-0.4,"1966":-0.3,"1967":-0.1,"1968":0.2,"1969":-0.1,"1970":0.2,"1971":0.2,"1972":-0.1,"1973":0.5,"1974":0.3,"1975":0.1,"1976":0.0,"1977":-0.4,"1978":-0.2,"1979":-0.2,"1980":0.0,"1981":-0.1,"1982":-0.1,"1983":-0.3,"1984":0.0,"1985":-0.2,"1986":-0.4,"1987":-0.5,"1988":0.4,"1989":0.1,"1990":0.0,"1991":0.1,"1992":0.1,"1993":-0.2,"1994":-0.1,"1995":0.2,"1996":0.3,"1997":-0.2,"1998":-0.2,"1999":0.5,"2000":0.6,"2001":0.2,"2002":0.4,"2003":0.4,"2004":0.6,"2005":0.5,"2006":0.5,"2007":0.5,"2008":0.5,"2009":0.4,"2010":0.7,"2011":0.8,"2012":0.4,"2013":0.6,"2014":0.5,"2015":0.0,"2016":0.4,"2017":0.7,"2018":0.6,"2019":0.6,"2020":0.7,"2021":0.8,"2022":0.9,"2023":0.5,"2024":0.6,"2025":0.5},"Tuvalu":{"1850":0.0,"1851":-0.4,"1852":-0.1,"1853":0.0,"1854":0.0,"1855":-0.1,"1856":-0.3,"1857":-0.5,"1858":-0.2,"1859":0.2,"1860":-0.2,"1861":-0.3,"1862":-0.1,"1863":-0.1,"1864":-0.1,"1865":-0.1,"1866":-0.1,"1867":-0.1,"1868":0.0,"1869":0.1,"1870":-0.3,"1871":0.0,"1872":0.0,"1873":-0.4,"1874":-0.1,"1875":-0.2,"1876":-0.2,"1877":-0.1,"1878":-0.1,"1879":-0.4,"1880":-0.4,"1881":0.2,"1882":0.3,"1883":-0.2,"1884":-0.2,"1885":-0.3,"1886":-0.5,"1887":-0.5,"1888":-0.1,"1889":-0.3,"1890":-0.6,"1891":-0.3,"1892":-0.2,"1893":-0.5,"1894":-0.3,"1895":-0.2,"1896":-0.3,"1897":-0.1,"1898":-0.4,"1899":-0.2,"1900":0.1,"1901":0.0,"1902":-0.3,"1903":-0.3,"1904":-0.6,"1905":-0.3,"1906":-0.4,"1907":-0.4,"1908":-0.7,"1909":-0.9,"1910":-1.1,"1911":-0.7,"1912":-0.4,"1913":-0.6,"1914":-0.3,"1915":-0.3,"1916":-1.0,"1917":-1.6,"1918":-0.6,"1919":-0.9,"1920":-0.5,"1921":-0.5,"1922":-0.4,"1923":-0.3,"1924":-0.4,"1925":-0.5,"1926":-0.3,"1927":-0.6,"1928":-0.3,"1929":-0.3,"1930":-0.2,"1931":-0.2,"1932":-0.3,"1933":-0.7,"1934":-0.7,"1935":-0.4,"1936":-0.4,"1937":-0.4,"1938":-0.6,"1939":-0.5,"1940":0.1,"1941":0.3,"1942":0.0,"1943":-0.2,"1944":0.1,"1945":0.0,"1946":0.1,"1947":0.0,"1948":-0.4,"1949":-0.5,"1950":-0.7,"1951":-0.2,"1952":-0.2,"1953":-0.1,"1954":-0.4,"1955":-0.7,"1956":-0.6,"1957":-0.4,"1958":0.0,"1959":-0.2,"1960":-0.3,"1961":-0.4,"1962":-0.4,"1963":-0.3,"1964":-0.6,"1965":-0.4,"1966":0.0,"1967":-0.4,"1968":-0.3,"1969":0.3,"1970":-0.2,"1971":-0.6,"1972":-0.1,"1973":-0.2,"1974":-0.6,"1975":-0.7,"1976":-0.4,"1977":0.1,"1978":0.0,"1979":0.1,"1980":0.2,"1981":-0.1,"1982":0.1,"1983":-0.2,"1984":-0.2,"1985":-0.2,"1986":0.0,"1987":0.1,"1988":0.0,"1989":-0.3,"1990":0.3,"1991":0.4,"1992":0.2,"1993":0.1,"1994":0.3,"1995":0.4,"1996":0.1,"1997":0.2,"1998":-0.2,"1999":-0.3,"2000":-0.1,"2001":0.2,"2002":0.5,"2003":0.6,"2004":0.6,"2005":0.5,"2006":0.4,"2007":0.4,"2008":-0.2,"2009":0.4,"2010":0.2,"2011":-0.2,"2012":0.3,"2013":0.4,"2014":0.6,"2015":0.6,"2016":0.7,"2017":0.5,"2018":0.6,"2019":0.8,"2020":0.6,"2021":0.2,"2022":-0.1,"2023":0.6,"2024":0.9,"2025":0.4},"Kiribati":{"1850":-0.2,"1851":-0.5,"1852":-0.2,"1853":-0.1,"1854":-0.1,"1855":0.1,"1856":-0.6,"1857":-0.8,"1858":-0.2,"1859":0.1,"1860":-0.5,"1861":-0.8,"1862":-0.8,"1863":-0.6,"1864":-0.5,"1865":-0.4,"1866":-0.5,"1867":-0.5,"1868":-0.5,"1869":-0.6,"1870":-1.1,"1871":-0.5,"1872":-0.6,"1873":-0.8,"1874":-0.7,"1875":-0.6,"1876":-0.5,"1877":0.4,"1878":0.0,"1879":-0.8,"1880":-0.4,"1881":0.1,"1882":0.0,"1883":-0.2,"1884":-0.1,"1885":0.0,"1886":-0.8,"1887":-1.0,"1888":0.4,"1889":-0.2,"1890":-1.0,"1891":-0.3,"1892":-0.6,"1893":-0.9,"1894":-0.7,"1895":-0.3,"1896":0.2,"1897":0.0,"1898":-0.7,"1899":-0.3,"1900":0.5,"1901":0.0,"1902":0.4,"1903":-0.1,"1904":-0.7,"1905":0.4,"1906":-0.3,"1907":-0.3,"1908":-0.7,"1909":-1.1,"1910":-1.3,"1911":-0.5,"1912":-0.1,"1913":-0.3,"1914":0.2,"1915":-0.1,"1916":-1.2,"1917":-2.0,"1918":-0.3,"1919":-0.5,"1920":-0.2,"1921":-0.7,"1922":-0.6,"1923":-0.3,"1924":-0.6,"1925":-0.5,"1926":-0.1,"1927":-0.6,"1928":-0.4,"1929":-0.3,"1930":0.1,"1931":-0.1,"1932":-0.4,"1933":-1.0,"1934":-0.8,"1935":-0.6,"1936":-0.5,"1937":-0.5,"1938":-1.2,"1939":-0.7,"1940":0.5,"1941":0.8,"1942":-0.2,"1943":-0.6,"1944":-0.1,"1945":-0.4,"1946":-0.2,"1947":-0.1,"1948":-0.4,"1949":-0.5,"1950":-1.1,"1951":-0.1,"1952":-0.1,"1953":0.2,"1954":-0.5,"1955":-1.0,"1956":-0.9,"1957":0.1,"1958":0.5,"1959":0.0,"1960":-0.3,"1961":-0.4,"1962":-0.5,"1963":0.0,"1964":-0.7,"1965":0.1,"1966":0.3,"1967":-0.3,"1968":-0.1,"1969":0.6,"1970":-0.3,"1971":-1.0,"1972":0.2,"1973":-0.4,"1974":-1.0,"1975":-1.2,"1976":-0.5,"1977":0.2,"1978":-0.1,"1979":0.1,"1980":0.2,"1981":-0.3,"1982":0.5,"1983":0.0,"1984":-0.4,"1985":-0.4,"1986":0.1,"1987":0.7,"1988":-0.3,"1989":-0.6,"1990":0.3,"1991":0.7,"1992":0.5,"1993":0.4,"1994":0.6,"1995":0.3,"1996":-0.2,"1997":0.6,"1998":-0.1,"1999":-0.8,"2000":-0.7,"2001":0.0,"2002":0.7,"2003":0.6,"2004":0.6,"2005":0.4,"2006":0.4,"2007":0.1,"2008":-0.6,"2009":0.4,"2010":-0.1,"2011":-0.7,"2012":0.0,"2013":0.1,"2014":0.5,"2015":1.1,"2016":0.7,"2017":0.2,"2018":0.4,"2019":0.8,"2020":0.2,"2021":-0.3,"2022":-0.6,"2023":0.7,"2024":0.8,"2025":0.1},"Nauru":{"1850":0.3,"1851":-0.2,"1852":0.2,"1853":0.2,"1854":0.1,"1855":0.1,"1856":-0.2,"1857":-0.1,"1858":0.0,"1859":0.4,"1860":-0.2,"1861":-0.5,"1862":-0.1,"1863":-0.1,"1864":0.0,"1865":0.1,"1866":0.0,"1867":-0.2,"1868":-0.2,"1869":-0.1,"1870":-0.7,"1871":-0.2,"1872":-0.2,"1873":-0.4,"1874":-0.1,"1875":-0.2,"1876":-0.3,"1877":-0.4,"1878":-0.4,"1879":-0.7,"1880":-0.3,"1881":0.3,"1882":0.6,"1883":0.0,"1884":0.0,"1885":-0.3,"1886":-0.4,"1887":-0.5,"1888":-0.1,"1889":-0.6,"1890":-0.3,"1891":0.1,"1892":0.0,"1893":-0.2,"1894":-0.1,"1895":-0.1,"1896":-0.3,"1897":-0.2,"1898":-0.5,"1899":-0.1,"1900":0.2,"1901":0.0,"1902":-0.5,"1903":-0.2,"1904":-0.4,"1905":-0.3,"1906":-0.6,"1907":-0.2,"1908":-0.7,"1909":-0.7,"1910":-1.2,"1911":-0.7,"1912":-0.4,"1913":-0.5,"1914":-0.1,"1915":-0.4,"1916":-1.2,"1917":-2.0,"1918":-0.5,"1919":-1.1,"1920":-0.5,"1921":-0.5,"1922":-0.3,"1923":-0.2,"1924":-0.4,"1925":-0.6,"1926":-0.4,"1927":-0.8,"1928":-0.4,"1929":-0.2,"1930":-0.2,"1931":-0.2,"1932":-0.4,"1933":-0.9,"1934":-0.9,"1935":-0.4,"1936":-0.4,"1937":-0.5,"1938":-0.7,"1939":-0.4,"1940":0.0,"1941":0.1,"1942":0.0,"1943":-0.3,"1944":0.1,"1945":-0.2,"1946":0.2,"1947":-0.1,"1948":-0.7,"1949":-0.9,"1950":-0.8,"1951":-0.2,"1952":-0.4,"1953":-0.4,"1954":-0.6,"1955":-0.8,"1956":-0.5,"1957":-0.5,"1958":0.0,"1959":-0.2,"1960":-0.4,"1961":-0.4,"1962":-0.3,"1963":-0.2,"1964":-0.7,"1965":-0.5,"1966":0.0,"1967":-0.2,"1968":-0.1,"1969":0.5,"1970":-0.3,"1971":-0.8,"1972":-0.2,"1973":-0.4,"1974":-0.6,"1975":-1.0,"1976":-0.4,"1977":0.0,"1978":0.0,"1979":0.2,"1980":0.3,"1981":0.1,"1982":0.2,"1983":-0.2,"1984":-0.3,"1985":-0.2,"1986":0.2,"1987":0.1,"1988":-0.1,"1989":-0.3,"1990":0.4,"1991":0.5,"1992":0.1,"1993":0.1,"1994":0.3,"1995":0.4,"1996":0.1,"1997":0.2,"1998":-0.4,"1999":-0.5,"2000":-0.4,"2001":0.2,"2002":0.6,"2003":0.7,"2004":0.7,"2005":0.7,"2006":0.5,"2007":0.4,"2008":-0.4,"2009":0.4,"2010":0.0,"2011":-0.3,"2012":0.1,"2013":0.3,"2014":0.8,"2015":0.7,"2016":0.6,"2017":0.5,"2018":0.8,"2019":0.9,"2020":0.6,"2021":0.1,"2022":-0.2,"2023":0.7,"2024":1.0,"2025":0.3},"Cook Islands":{"1850":-0.2,"1851":-0.3,"1852":-0.1,"1853":0.4,"1854":0.3,"1855":-0.2,"1856":-0.2,"1857":-0.6,"1858":-0.1,"1859":0.2,"1860":-0.1,"1861":-0.5,"1862":-0.5,"1863":-0.5,"1864":-0.2,"1865":-0.2,"1866":-0.2,"1867":-0.3,"1868":-0.1,"1869":-0.2,"1870":-0.3,"1871":0.0,"1872":0.0,"1873":-0.4,"1874":-0.1,"1875":-0.1,"1876":0.0,"1877":0.0,"1878":-0.1,"1879":-0.2,"1880":-0.2,"1881":0.0,"1882":0.0,"1883":-0.4,"1884":-0.5,"1885":-0.6,"1886":-0.6,"1887":-0.5,"1888":-0.2,"1889":0.0,"1890":-0.6,"1891":-0.4,"1892":-0.3,"1893":-0.6,"1894":-0.2,"1895":-0.1,"1896":-0.3,"1897":-0.1,"1898":-0.2,"1899":0.0,"1900":0.2,"1901":0.5,"1902":-0.2,"1903":-0.1,"1904":-0.6,"1905":-0.4,"1906":0.0,"1907":-0.4,"1908":-0.4,"1909":-0.8,"1910":-0.7,"1911":-0.6,"1912":-0.3,"1913":-0.4,"1914":-0.2,"1915":0.0,"1916":-0.1,"1917":-0.8,"1918":-0.4,"1919":-0.6,"1920":-0.2,"1921":-0.4,"1922":-0.1,"1923":-0.4,"1924":-0.2,"1925":-0.4,"1926":-0.2,"1927":-0.2,"1928":-0.2,"1929":-0.3,"1930":-0.3,"1931":-0.2,"1932":-0.1,"1933":-0.6,"1934":-0.4,"1935":-0.4,"1936":-0.4,"1937":-0.3,"1938":-0.5,"1939":-0.6,"1940":0.0,"1941":0.1,"1942":0.2,"1943":0.1,"1944":0.3,"1945":0.1,"1946":0.2,"1947":0.1,"1948":-0.2,"1949":0.0,"1950":-0.2,"1951":0.0,"1952":0.3,"1953":0.2,"1954":0.0,"1955":-0.4,"1956":-0.4,"1957":-0.1,"1958":0.0,"1959":0.1,"1960":0.0,"1961":0.0,"1962":-0.3,"1963":0.0,"1964":-0.1,"1965":-0.2,"1966":0.0,"1967":-0.2,"1968":0.0,"1969":0.2,"1970":0.1,"1971":-0.3,"1972":-0.1,"1973":0.3,"1974":-0.4,"1975":-0.4,"1976":-0.4,"1977":-0.1,"1978":-0.2,"1979":-0.2,"1980":0.0,"1981":-0.3,"1982":0.0,"1983":-0.3,"1984":-0.1,"1985":-0.3,"1986":-0.2,"1987":0.0,"1988":0.2,"1989":-0.2,"1990":0.0,"1991":0.3,"1992":0.3,"1993":0.1,"1994":0.2,"1995":0.3,"1996":0.1,"1997":0.0,"1998":0.0,"1999":0.1,"2000":0.2,"2001":0.2,"2002":0.4,"2003":0.5,"2004":0.6,"2005":0.5,"2006":0.5,"2007":0.5,"2008":0.1,"2009":0.5,"2010":0.6,"2011":0.1,"2012":0.3,"2013":0.5,"2014":0.5,"2015":0.4,"2016":0.6,"2017":0.6,"2018":0.4,"2019":0.7,"2020":0.6,"2021":0.4,"2022":0.2,"2023":0.5,"2024":0.7,"2025":0.5},"Northern Mariana Islands":{"1850":-0.4,"1851":0.2,"1852":0.1,"1853":-0.1,"1854":0.1,"1855":-0.6,"1856":-0.2,"1857":-0.2,"1858":-0.5,"1859":0.1,"1860":-0.3,"1861":-0.5,"1862":-0.6,"1863":-0.4,"1864":-0.5,"1865":0.0,"1866":-0.1,"1867":-0.3,"1868":-0.3,"1869":0.4,"1870":0.5,"1871":-0.1,"1872":0.1,"1873":0.0,"1874":-0.3,"1875":-0.1,"1876":0.1,"1877":0.0,"1878":0.6,"1879":0.3,"1880":-0.8,"1881":-0.1,"1882":-0.1,"1883":-0.7,"1884":-0.3,"1885":-0.8,"1886":-0.5,"1887":0.0,"1888":0.1,"1889":0.2,"1890":0.0,"1891":0.0,"1892":0.3,"1893":-0.2,"1894":0.0,"1895":0.2,"1896":0.4,"1897":0.6,"1898":0.2,"1899":-0.5,"1900":0.0,"1901":-0.1,"1902":-0.2,"1903":-0.6,"1904":-0.5,"1905":-0.3,"1906":-0.2,"1907":-0.6,"1908":-0.3,"1909":-0.3,"1910":-0.1,"1911":-0.5,"1912":-0.4,"1913":-0.5,"1914":-0.6,"1915":-0.4,"1916":-0.3,"1917":-0.5,"1918":-0.7,"1919":-0.5,"1920":-0.7,"1921":-0.2,"1922":-0.4,"1923":-0.7,"1924":-0.3,"1925":-0.4,"1926":-0.3,"1927":-0.3,"1928":-0.7,"1929":-0.4,"1930":-0.4,"1931":-0.1,"1932":-0.4,"1933":-0.4,"1934":-0.5,"1935":-0.4,"1936":-0.4,"1937":-0.3,"1938":-0.2,"1939":-0.4,"1940":-0.4,"1941":0.0,"1942":-0.1,"1943":0.1,"1944":0.1,"1945":0.3,"1946":0.3,"1947":0.0,"1948":-0.2,"1949":-0.1,"1950":-0.1,"1951":0.1,"1952":0.1,"1953":0.1,"1954":0.1,"1955":-0.1,"1956":-0.3,"1957":-0.3,"1958":-0.3,"1959":-0.2,"1960":0.0,"1961":0.0,"1962":-0.2,"1963":-0.3,"1964":-0.1,"1965":-0.4,"1966":-0.1,"1967":-0.2,"1968":-0.3,"1969":0.1,"1970":0.1,"1971":0.0,"1972":-0.6,"1973":-0.1,"1974":-0.2,"1975":0.0,"1976":-0.1,"1977":-0.1,"1978":-0.2,"1979":-0.2,"1980":0.0,"1981":0.1,"1982":-0.2,"1983":-0.1,"1984":0.0,"1985":-0.1,"1986":-0.1,"1987":0.0,"1988":0.5,"1989":0.1,"1990":-0.2,"1991":-0.1,"1992":-0.3,"1993":-0.3,"1994":-0.1,"1995":0.0,"1996":0.1,"1997":0.0,"1998":0.4,"1999":0.7,"2000":0.4,"2001":0.6,"2002":0.3,"2003":0.3,"2004":0.1,"2005":0.2,"2006":0.1,"2007":0.4,"2008":0.6,"2009":0.4,"2010":0.2,"2011":0.2,"2012":0.2,"2013":0.4,"2014":0.3,"2015":0.2,"2016":0.6,"2017":0.8,"2018":0.7,"2019":0.7,"2020":0.8,"2021":0.8,"2022":0.7,"2023":0.5,"2024":0.7,"2025":0.9},"Fiji":{"1850":-0.2,"1851":-0.1,"1852":-0.2,"1853":-0.1,"1854":-0.4,"1855":-0.4,"1856":-0.5,"1857":0.1,"1858":-0.2,"1859":0.0,"1860":0.0,"1861":-0.1,"1862":-0.1,"1863":0.1,"1864":0.1,"1865":0.0,"1866":0.0,"1867":0.1,"1868":0.0,"1869":0.0,"1870":0.2,"1871":0.1,"1872":0.2,"1873":0.1,"1874":0.1,"1875":0.0,"1876":0.0,"1877":-0.4,"1878":-0.1,"1879":0.3,"1880":0.1,"1881":-0.1,"1882":0.0,"1883":-0.5,"1884":-0.8,"1885":-1.0,"1886":-0.7,"1887":-0.5,"1888":-0.7,"1889":-0.3,"1890":-0.2,"1891":-0.3,"1892":-0.4,"1893":0.1,"1894":-0.4,"1895":-0.3,"1896":-0.4,"1897":-0.4,"1898":-0.1,"1899":-0.2,"1900":-0.6,"1901":-0.4,"1902":-1.0,"1903":-0.8,"1904":-0.7,"1905":-1.1,"1906":-0.6,"1907":-0.6,"1908":-0.6,"1909":-0.6,"1910":-0.3,"1911":-0.6,"1912":-0.7,"1913":-0.8,"1914":-0.8,"1915":-0.4,"1916":0.0,"1917":-0.2,"1918":-0.5,"1919":-0.9,"1920":-0.5,"1921":-0.6,"1922":-0.3,"1923":-0.5,"1924":-0.1,"1925":-0.5,"1926":-0.6,"1927":-0.3,"1928":-0.5,"1929":-0.5,"1930":-0.8,"1931":-0.7,"1932":-0.5,"1933":-0.4,"1934":-0.7,"1935":-0.3,"1936":-0.3,"1937":-0.3,"1938":-0.2,"1939":-0.5,"1940":-0.7,"1941":-0.5,"1942":-0.3,"1943":0.2,"1944":0.2,"1945":0.0,"1946":-0.3,"1947":-0.2,"1948":-0.2,"1949":-0.2,"1950":0.0,"1951":-0.2,"1952":0.0,"1953":-0.1,"1954":-0.3,"1955":-0.1,"1956":0.1,"1957":-0.3,"1958":-0.3,"1959":-0.3,"1960":-0.1,"1961":-0.1,"1962":-0.1,"1963":-0.2,"1964":-0.1,"1965":-0.6,"1966":-0.4,"1967":-0.2,"1968":-0.1,"1969":-0.3,"1970":0.0,"1971":0.1,"1972":-0.2,"1973":0.2,"1974":0.3,"1975":0.2,"1976":0.0,"1977":-0.4,"1978":-0.3,"1979":-0.1,"1980":-0.1,"1981":-0.1,"1982":-0.3,"1983":-0.3,"1984":0.1,"1985":-0.1,"1986":-0.3,"1987":-0.4,"1988":0.4,"1989":0.1,"1990":0.1,"1991":-0.2,"1992":-0.2,"1993":-0.4,"1994":-0.4,"1995":0.1,"1996":0.2,"1997":-0.2,"1998":0.1,"1999":0.3,"2000":0.4,"2001":0.3,"2002":0.3,"2003":0.2,"2004":0.2,"2005":0.3,"2006":0.2,"2007":0.4,"2008":0.5,"2009":0.2,"2010":0.4,"2011":0.6,"2012":0.3,"2013":0.5,"2014":0.4,"2015":-0.1,"2016":0.5,"2017":0.5,"2018":0.4,"2019":0.4,"2020":0.5,"2021":0.7,"2022":1.1,"2023":0.5,"2024":0.6,"2025":0.7},"Marshall Islands":{"1850":-0.2,"1851":-0.3,"1852":0.1,"1853":-0.1,"1854":-0.2,"1855":-0.1,"1856":-0.2,"1857":0.0,"1858":-0.3,"1859":0.1,"1860":-0.2,"1861":-0.5,"1862":-0.1,"1863":-0.1,"1864":-0.1,"1865":-0.2,"1866":-0.1,"1867":-0.1,"1868":-0.1,"1869":-0.1,"1870":-0.6,"1871":-0.3,"1872":-0.4,"1873":-0.3,"1874":-0.1,"1875":-0.4,"1876":-0.4,"1877":-0.3,"1878":-0.4,"1879":-0.3,"1880":-0.6,"1881":0.0,"1882":0.2,"1883":-0.1,"1884":-0.2,"1885":-0.5,"1886":-0.4,"1887":-0.2,"1888":-0.3,"1889":-0.6,"1890":-0.3,"1891":0.0,"1892":-0.1,"1893":-0.3,"1894":-0.2,"1895":-0.2,"1896":-0.3,"1897":-0.2,"1898":-0.3,"1899":-0.4,"1900":-0.2,"1901":0.1,"1902":-0.5,"1903":-0.5,"1904":-0.5,"1905":-0.5,"1906":-0.5,"1907":-0.2,"1908":-0.6,"1909":-0.5,"1910":-0.7,"1911":-0.6,"1912":-0.6,"1913":-0.6,"1914":-0.5,"1915":-0.6,"1916":-1.0,"1917":-1.2,"1918":-0.5,"1919":-0.9,"1920":-0.5,"1921":-0.3,"1922":-0.3,"1923":-0.4,"1924":-0.3,"1925":-0.4,"1926":-0.2,"1927":-0.4,"1928":-0.4,"1929":-0.2,"1930":-0.4,"1931":-0.3,"1932":-0.4,"1933":-0.6,"1934":-0.3,"1935":-0.3,"1936":-0.4,"1937":-0.4,"1938":-0.3,"1939":-0.3,"1940":0.0,"1941":0.0,"1942":-0.2,"1943":0.2,"1944":0.2,"1945":0.1,"1946":0.1,"1947":0.0,"1948":-0.3,"1949":-0.5,"1950":-0.3,"1951":0.0,"1952":-0.2,"1953":0.0,"1954":-0.2,"1955":-0.4,"1956":-0.1,"1957":-0.1,"1958":0.0,"1959":0.0,"1960":0.0,"1961":0.0,"1962":0.2,"1963":0.3,"1964":-0.2,"1965":-0.2,"1966":0.1,"1967":0.1,"1968":0.1,"1969":0.2,"1970":-0.1,"1971":-0.3,"1972":-0.3,"1973":-0.3,"1974":-0.1,"1975":-0.5,"1976":-0.3,"1977":-0.1,"1978":-0.1,"1979":0.0,"1980":0.1,"1981":0.2,"1982":0.0,"1983":-0.3,"1984":0.1,"1985":0.0,"1986":0.1,"1987":-0.1,"1988":0.1,"1989":0.0,"1990":0.3,"1991":0.2,"1992":-0.1,"1993":-0.2,"1994":0.1,"1995":0.2,"1996":0.3,"1997":0.1,"1998":-0.3,"1999":-0.1,"2000":0.1,"2001":0.3,"2002":0.4,"2003":0.5,"2004":0.6,"2005":0.5,"2006":0.4,"2007":0.4,"2008":0.0,"2009":0.4,"2010":0.0,"2011":0.3,"2012":0.3,"2013":0.4,"2014":0.7,"2015":0.5,"2016":0.4,"2017":0.6,"2018":0.6,"2019":0.6,"2020":0.5,"2021":0.4,"2022":0.3,"2023":0.6,"2024":0.7,"2025":0.6},"Wallis and Futuna":{"1850":0.0,"1851":-0.4,"1852":-0.1,"1853":0.1,"1854":0.0,"1855":-0.3,"1856":-0.3,"1857":-0.4,"1858":-0.2,"1859":0.1,"1860":-0.2,"1861":-0.4,"1862":-0.3,"1863":-0.3,"1864":-0.2,"1865":-0.2,"1866":-0.2,"1867":-0.1,"1868":-0.1,"1869":0.0,"1870":-0.2,"1871":0.0,"1872":0.0,"1873":-0.3,"1874":0.0,"1875":-0.1,"1876":-0.1,"1877":-0.2,"1878":-0.2,"1879":-0.2,"1880":-0.2,"1881":0.2,"1882":0.1,"1883":-0.3,"1884":-0.3,"1885":-0.5,"1886":-0.5,"1887":-0.3,"1888":-0.3,"1889":-0.3,"1890":-0.5,"1891":-0.4,"1892":-0.3,"1893":-0.6,"1894":-0.4,"1895":-0.2,"1896":-0.4,"1897":-0.3,"1898":-0.3,"1899":-0.2,"1900":-0.1,"1901":-0.1,"1902":-0.6,"1903":-0.4,"1904":-0.6,"1905":-0.5,"1906":-0.4,"1907":-0.5,"1908":-0.6,"1909":-0.7,"1910":-0.8,"1911":-0.6,"1912":-0.4,"1913":-0.6,"1914":-0.4,"1915":-0.3,"1916":-0.5,"1917":-0.9,"1918":-0.6,"1919":-1.0,"1920":-0.6,"1921":-0.5,"1922":-0.2,"1923":-0.4,"1924":-0.2,"1925":-0.3,"1926":-0.4,"1927":-0.4,"1928":-0.3,"1929":-0.3,"1930":-0.4,"1931":-0.4,"1932":-0.3,"1933":-0.6,"1934":-0.4,"1935":-0.4,"1936":-0.2,"1937":-0.3,"1938":-0.4,"1939":-0.5,"1940":-0.2,"1941":0.0,"1942":0.0,"1943":0.0,"1944":0.1,"1945":0.0,"1946":0.1,"1947":0.1,"1948":-0.2,"1949":-0.3,"1950":-0.3,"1951":-0.1,"1952":0.0,"1953":0.0,"1954":-0.2,"1955":-0.4,"1956":-0.3,"1957":-0.2,"1958":-0.1,"1959":-0.1,"1960":-0.1,"1961":-0.1,"1962":-0.1,"1963":-0.1,"1964":-0.2,"1965":-0.3,"1966":-0.1,"1967":-0.3,"1968":-0.1,"1969":0.2,"1970":0.0,"1971":-0.2,"1972":-0.1,"1973":0.0,"1974":-0.2,"1975":-0.3,"1976":-0.3,"1977":-0.1,"1978":0.0,"1979":0.0,"1980":0.1,"1981":-0.1,"1982":0.0,"1983":-0.3,"1984":0.0,"1985":-0.2,"1986":-0.1,"1987":-0.1,"1988":0.0,"1989":-0.1,"1990":0.1,"1991":0.3,"1992":0.1,"1993":0.0,"1994":0.2,"1995":0.3,"1996":0.1,"1997":-0.1,"1998":-0.2,"1999":0.1,"2000":0.3,"2001":0.3,"2002":0.4,"2003":0.5,"2004":0.5,"2005":0.5,"2006":0.4,"2007":0.5,"2008":0.2,"2009":0.4,"2010":0.4,"2011":0.2,"2012":0.4,"2013":0.5,"2014":0.6,"2015":0.4,"2016":0.6,"2017":0.6,"2018":0.5,"2019":0.7,"2020":0.6,"2021":0.4,"2022":0.4,"2023":0.6,"2024":0.7,"2025":0.5},"Tokelau":{"1850":-0.1,"1851":-0.3,"1852":-0.1,"1853":0.0,"1854":0.0,"1855":-0.1,"1856":-0.3,"1857":-0.7,"1858":-0.2,"1859":0.1,"1860":-0.4,"1861":-0.6,"1862":-0.6,"1863":-0.5,"1864":-0.3,"1865":-0.4,"1866":-0.4,"1867":-0.4,"1868":-0.4,"1869":-0.3,"1870":-0.7,"1871":-0.3,"1872":-0.3,"1873":-0.6,"1874":-0.4,"1875":-0.4,"1876":-0.3,"1877":0.2,"1878":0.0,"1879":-0.6,"1880":-0.4,"1881":0.1,"1882":0.0,"1883":-0.3,"1884":-0.3,"1885":-0.3,"1886":-0.6,"1887":-0.8,"1888":0.1,"1889":0.0,"1890":-0.9,"1891":-0.4,"1892":-0.4,"1893":-0.8,"1894":-0.5,"1895":-0.3,"1896":-0.1,"1897":0.0,"1898":-0.5,"1899":-0.3,"1900":0.4,"1901":0.1,"1902":0.0,"1903":-0.1,"1904":-0.8,"1905":0.0,"1906":-0.3,"1907":-0.4,"1908":-0.6,"1909":-1.0,"1910":-1.1,"1911":-0.7,"1912":-0.2,"1913":-0.5,"1914":-0.2,"1915":-0.1,"1916":-0.9,"1917":-1.6,"1918":-0.5,"1919":-0.6,"1920":-0.3,"1921":-0.7,"1922":-0.4,"1923":-0.4,"1924":-0.4,"1925":-0.4,"1926":0.0,"1927":-0.5,"1928":-0.3,"1929":-0.3,"1930":-0.1,"1931":-0.1,"1932":-0.3,"1933":-0.7,"1934":-0.6,"1935":-0.5,"1936":-0.4,"1937":-0.4,"1938":-0.8,"1939":-0.7,"1940":0.2,"1941":0.5,"1942":0.0,"1943":-0.4,"1944":0.0,"1945":-0.1,"1946":0.0,"1947":0.0,"1948":-0.3,"1949":-0.3,"1950":-0.8,"1951":-0.2,"1952":0.0,"1953":0.1,"1954":-0.3,"1955":-0.8,"1956":-0.8,"1957":-0.1,"1958":0.3,"1959":0.1,"1960":-0.2,"1961":-0.2,"1962":-0.3,"1963":-0.1,"1964":-0.4,"1965":-0.1,"1966":0.2,"1967":-0.3,"1968":-0.1,"1969":0.4,"1970":-0.1,"1971":-0.7,"1972":0.0,"1973":-0.1,"1974":-0.7,"1975":-0.7,"1976":-0.5,"1977":0.2,"1978":0.0,"1979":0.0,"1980":0.2,"1981":-0.2,"1982":0.1,"1983":-0.1,"1984":-0.2,"1985":-0.3,"1986":0.1,"1987":0.4,"1988":0.0,"1989":-0.4,"1990":0.2,"1991":0.5,"1992":0.4,"1993":0.3,"1994":0.5,"1995":0.4,"1996":0.0,"1997":0.2,"1998":-0.1,"1999":-0.4,"2000":-0.3,"2001":0.1,"2002":0.5,"2003":0.6,"2004":0.5,"2005":0.4,"2006":0.4,"2007":0.3,"2008":-0.3,"2009":0.5,"2010":0.2,"2011":-0.4,"2012":0.2,"2013":0.3,"2014":0.5,"2015":0.8,"2016":0.7,"2017":0.5,"2018":0.5,"2019":0.8,"2020":0.5,"2021":0.0,"2022":-0.2,"2023":0.6,"2024":0.8,"2025":0.4},"Solomon Islands":{"1850":0.0,"1851":0.1,"1852":0.0,"1853":-0.2,"1854":-0.4,"1855":-0.4,"1856":-0.6,"1857":0.0,"1858":-0.2,"1859":0.0,"1860":-0.4,"1861":-0.9,"1862":-0.3,"1863":-0.2,"1864":-0.1,"1865":-0.2,"1866":0.0,"1867":-0.1,"1868":-0.2,"1869":0.2,"1870":-0.1,"1871":-0.1,"1872":-0.1,"1873":-0.2,"1874":0.0,"1875":-0.2,"1876":-0.2,"1877":-0.4,"1878":-0.2,"1879":-0.2,"1880":-0.3,"1881":0.2,"1882":0.2,"1883":-0.3,"1884":-0.6,"1885":-0.9,"1886":-0.6,"1887":-0.1,"1888":-0.4,"1889":-0.3,"1890":-0.1,"1891":0.0,"1892":0.0,"1893":-0.1,"1894":-0.4,"1895":-0.3,"1896":-0.3,"1897":-0.1,"1898":-0.3,"1899":-0.2,"1900":-0.1,"1901":-0.3,"1902":-0.9,"1903":-0.8,"1904":-0.7,"1905":-0.8,"1906":-0.7,"1907":-0.3,"1908":-0.4,"1909":-0.5,"1910":-0.5,"1911":-0.7,"1912":-0.7,"1913":-0.7,"1914":-0.7,"1915":-0.5,"1916":-0.4,"1917":-0.9,"1918":-0.8,"1919":-1.3,"1920":-0.8,"1921":-0.2,"1922":-0.2,"1923":-0.4,"1924":-0.3,"1925":-0.5,"1926":-0.5,"1927":-0.5,"1928":-0.4,"1929":-0.4,"1930":-0.6,"1931":-0.4,"1932":-0.5,"1933":-0.4,"1934":-0.5,"1935":-0.4,"1936":-0.3,"1937":-0.4,"1938":-0.3,"1939":-0.5,"1940":-0.5,"1941":-0.5,"1942":-0.2,"1943":0.4,"1944":0.2,"1945":0.2,"1946":-0.2,"1947":-0.3,"1948":-0.4,"1949":-0.6,"1950":-0.3,"1951":-0.4,"1952":-0.4,"1953":-0.4,"1954":-0.4,"1955":-0.4,"1956":-0.1,"1957":-0.5,"1958":-0.4,"1959":-0.4,"1960":-0.3,"1961":-0.3,"1962":-0.1,"1963":-0.1,"1964":-0.3,"1965":-0.8,"1966":-0.5,"1967":-0.3,"1968":-0.2,"1969":0.0,"1970":0.0,"1971":-0.1,"1972":-0.4,"1973":0.0,"1974":0.0,"1975":-0.2,"1976":-0.3,"1977":-0.2,"1978":-0.1,"1979":-0.1,"1980":-0.1,"1981":0.1,"1982":-0.2,"1983":-0.3,"1984":0.0,"1985":0.0,"1986":-0.1,"1987":-0.3,"1988":0.2,"1989":0.2,"1990":0.2,"1991":0.1,"1992":-0.3,"1993":-0.5,"1994":-0.1,"1995":0.3,"1996":0.3,"1997":-0.1,"1998":0.2,"1999":0.2,"2000":0.3,"2001":0.4,"2002":0.3,"2003":0.5,"2004":0.3,"2005":0.5,"2006":0.3,"2007":0.6,"2008":0.3,"2009":0.4,"2010":0.4,"2011":0.4,"2012":0.3,"2013":0.4,"2014":0.5,"2015":0.1,"2016":0.7,"2017":0.7,"2018":0.6,"2019":0.5,"2020":0.8,"2021":0.6,"2022":0.7,"2023":0.6,"2024":0.9,"2025":0.9},"French Polynesia":{"1850":-0.5,"1851":-0.3,"1852":-0.3,"1853":-0.1,"1854":0.1,"1855":-0.3,"1856":-0.3,"1857":-0.4,"1858":-0.1,"1859":-0.1,"1860":-0.2,"1861":-0.4,"1862":-0.5,"1863":-0.4,"1864":-0.3,"1865":-0.3,"1866":-0.3,"1867":-0.4,"1868":-0.2,"1869":-0.5,"1870":-0.4,"1871":-0.2,"1872":-0.4,"1873":-0.7,"1874":-0.5,"1875":-0.6,"1876":-0.5,"1877":-0.3,"1878":-0.3,"1879":-0.4,"1880":-0.3,"1881":-0.3,"1882":-0.2,"1883":-0.5,"1884":-0.5,"1885":-0.7,"1886":-0.6,"1887":-0.3,"1888":-0.3,"1889":-0.1,"1890":-0.9,"1891":-0.5,"1892":-0.2,"1893":-0.5,"1894":-0.2,"1895":-0.3,"1896":-0.1,"1897":0.1,"1898":-0.2,"1899":0.1,"1900":0.1,"1901":0.4,"1902":0.0,"1903":-0.2,"1904":-0.6,"1905":-0.4,"1906":-0.1,"1907":-0.4,"1908":-0.3,"1909":-0.8,"1910":-0.8,"1911":-0.6,"1912":-0.5,"1913":-0.4,"1914":-0.6,"1915":-0.2,"1916":-0.2,"1917":-0.8,"1918":-0.3,"1919":-0.3,"1920":-0.1,"1921":-0.5,"1922":-0.3,"1923":-0.5,"1924":-0.5,"1925":-0.5,"1926":-0.2,"1927":-0.2,"1928":-0.3,"1929":-0.3,"1930":-0.3,"1931":-0.2,"1932":-0.2,"1933":-0.3,"1934":-0.4,"1935":-0.3,"1936":-0.6,"1937":-0.4,"1938":-0.5,"1939":-0.4,"1940":0.0,"1941":-0.1,"1942":-0.1,"1943":0.0,"1944":0.2,"1945":0.2,"1946":-0.2,"1947":-0.1,"1948":-0.2,"1949":0.0,"1950":-0.4,"1951":-0.2,"1952":0.1,"1953":0.0,"1954":-0.2,"1955":-0.5,"1956":-0.4,"1957":-0.1,"1958":-0.2,"1959":-0.2,"1960":-0.1,"1961":-0.2,"1962":-0.5,"1963":-0.2,"1964":-0.2,"1965":-0.2,"1966":-0.2,"1967":-0.3,"1968":-0.4,"1969":0.0,"1970":-0.1,"1971":-0.4,"1972":-0.2,"1973":0.1,"1974":-0.5,"1975":-0.6,"1976":-0.5,"1977":-0.2,"1978":-0.3,"1979":-0.4,"1980":-0.1,"1981":-0.3,"1982":0.0,"1983":-0.1,"1984":0.0,"1985":-0.1,"1986":-0.1,"1987":0.1,"1988":0.2,"1989":0.0,"1990":-0.1,"1991":0.2,"1992":0.1,"1993":-0.1,"1994":0.2,"1995":0.2,"1996":0.0,"1997":0.1,"1998":0.2,"1999":0.2,"2000":0.2,"2001":0.2,"2002":0.4,"2003":0.4,"2004":0.4,"2005":0.2,"2006":0.4,"2007":0.4,"2008":0.2,"2009":0.4,"2010":0.3,"2011":0.0,"2012":0.3,"2013":0.2,"2014":0.1,"2015":0.2,"2016":0.7,"2017":0.5,"2018":0.3,"2019":0.4,"2020":0.5,"2021":0.4,"2022":0.1,"2023":0.5,"2024":0.4,"2025":0.6},"Tonga":{"1850":-0.2,"1851":-0.3,"1852":-0.1,"1853":0.3,"1854":0.0,"1855":-0.3,"1856":-0.3,"1857":0.0,"1858":-0.2,"1859":0.2,"1860":0.1,"1861":0.1,"1862":0.0,"1863":0.1,"1864":0.1,"1865":0.1,"1866":0.0,"1867":0.2,"1868":0.1,"1869":0.1,"1870":0.2,"1871":0.4,"1872":0.3,"1873":0.1,"1874":0.2,"1875":0.2,"1876":0.2,"1877":-0.3,"1878":-0.1,"1879":0.4,"1880":0.2,"1881":-0.1,"1882":0.1,"1883":-0.5,"1884":-0.8,"1885":-1.0,"1886":-0.6,"1887":-0.4,"1888":-0.7,"1889":-0.2,"1890":-0.2,"1891":-0.4,"1892":-0.3,"1893":0.0,"1894":-0.3,"1895":-0.2,"1896":-0.5,"1897":-0.5,"1898":0.0,"1899":-0.2,"1900":-0.7,"1901":-0.1,"1902":-0.9,"1903":-0.7,"1904":-0.6,"1905":-1.1,"1906":-0.3,"1907":-0.7,"1908":-0.6,"1909":-0.6,"1910":-0.3,"1911":-0.5,"1912":-0.6,"1913":-0.7,"1914":-0.6,"1915":-0.2,"1916":0.2,"1917":0.0,"1918":-0.4,"1919":-0.9,"1920":-0.5,"1921":-0.6,"1922":-0.2,"1923":-0.5,"1924":-0.1,"1925":-0.4,"1926":-0.6,"1927":-0.2,"1928":-0.5,"1929":-0.4,"1930":-0.8,"1931":-0.7,"1932":-0.4,"1933":-0.4,"1934":-0.6,"1935":-0.3,"1936":-0.3,"1937":-0.3,"1938":-0.2,"1939":-0.5,"1940":-0.6,"1941":-0.4,"1942":-0.1,"1943":0.3,"1944":0.2,"1945":0.0,"1946":-0.1,"1947":0.0,"1948":-0.2,"1949":-0.1,"1950":0.1,"1951":-0.1,"1952":0.2,"1953":0.0,"1954":-0.1,"1955":0.0,"1956":0.1,"1957":-0.2,"1958":-0.3,"1959":-0.2,"1960":-0.1,"1961":0.1,"1962":-0.1,"1963":-0.2,"1964":0.0,"1965":-0.5,"1966":-0.3,"1967":-0.2,"1968":0.1,"1969":-0.2,"1970":0.1,"1971":0.2,"1972":-0.1,"1973":0.4,"1974":0.4,"1975":0.3,"1976":0.0,"1977":-0.4,"1978":-0.3,"1979":-0.2,"1980":0.0,"1981":-0.1,"1982":-0.2,"1983":-0.3,"1984":0.1,"1985":-0.1,"1986":-0.4,"1987":-0.5,"1988":0.4,"1989":0.1,"1990":0.0,"1991":-0.1,"1992":0.0,"1993":-0.3,"1994":-0.3,"1995":0.2,"1996":0.3,"1997":-0.2,"1998":0.0,"1999":0.4,"2000":0.5,"2001":0.2,"2002":0.3,"2003":0.3,"2004":0.4,"2005":0.4,"2006":0.3,"2007":0.4,"2008":0.6,"2009":0.3,"2010":0.6,"2011":0.8,"2012":0.4,"2013":0.6,"2014":0.4,"2015":-0.1,"2016":0.4,"2017":0.6,"2018":0.5,"2019":0.5,"2020":0.7,"2021":0.8,"2022":1.1,"2023":0.5,"2024":0.6,"2025":0.6},"Vanuatu":{"1850":-0.3,"1851":0.1,"1852":-0.2,"1853":-0.4,"1854":-0.8,"1855":-0.6,"1856":-0.8,"1857":0.0,"1858":-0.4,"1859":-0.2,"1860":-0.4,"1861":-0.5,"1862":-0.2,"1863":0.0,"1864":0.1,"1865":-0.1,"1866":0.0,"1867":0.0,"1868":-0.2,"1869":0.0,"1870":0.1,"1871":-0.2,"1872":0.0,"1873":0.0,"1874":0.0,"1875":-0.1,"1876":-0.2,"1877":-0.5,"1878":-0.2,"1879":0.1,"1880":-0.1,"1881":-0.1,"1882":0.0,"1883":-0.4,"1884":-0.8,"1885":-1.0,"1886":-0.7,"1887":-0.4,"1888":-0.8,"1889":-0.3,"1890":-0.1,"1891":-0.1,"1892":-0.3,"1893":0.3,"1894":-0.4,"1895":-0.4,"1896":-0.3,"1897":-0.2,"1898":-0.2,"1899":-0.3,"1900":-0.4,"1901":-0.6,"1902":-1.0,"1903":-0.9,"1904":-0.7,"1905":-1.0,"1906":-0.7,"1907":-0.4,"1908":-0.5,"1909":-0.4,"1910":-0.2,"1911":-0.6,"1912":-0.7,"1913":-0.9,"1914":-0.9,"1915":-0.5,"1916":-0.1,"1917":-0.2,"1918":-0.6,"1919":-0.9,"1920":-0.6,"1921":-0.5,"1922":-0.3,"1923":-0.5,"1924":-0.2,"1925":-0.5,"1926":-0.6,"1927":-0.4,"1928":-0.5,"1929":-0.6,"1930":-0.9,"1931":-0.7,"1932":-0.7,"1933":-0.4,"1934":-0.7,"1935":-0.3,"1936":-0.4,"1937":-0.4,"1938":-0.1,"1939":-0.5,"1940":-0.8,"1941":-0.6,"1942":-0.4,"1943":0.3,"1944":0.1,"1945":0.0,"1946":-0.4,"1947":-0.4,"1948":-0.3,"1949":-0.4,"1950":-0.1,"1951":-0.3,"1952":-0.2,"1953":-0.3,"1954":-0.4,"1955":-0.2,"1956":0.1,"1957":-0.4,"1958":-0.4,"1959":-0.4,"1960":-0.2,"1961":-0.2,"1962":0.0,"1963":-0.3,"1964":-0.2,"1965":-0.8,"1966":-0.6,"1967":-0.3,"1968":-0.2,"1969":-0.3,"1970":0.0,"1971":0.1,"1972":-0.3,"1973":0.1,"1974":0.3,"1975":0.2,"1976":-0.1,"1977":-0.4,"1978":-0.3,"1979":-0.1,"1980":-0.2,"1981":0.0,"1982":-0.3,"1983":-0.3,"1984":0.1,"1985":0.0,"1986":-0.2,"1987":-0.4,"1988":0.3,"1989":0.2,"1990":0.2,"1991":-0.3,"1992":-0.4,"1993":-0.6,"1994":-0.5,"1995":0.1,"1996":0.2,"1997":-0.2,"1998":0.4,"1999":0.4,"2000":0.3,"2001":0.4,"2002":0.2,"2003":0.2,"2004":0.1,"2005":0.3,"2006":0.1,"2007":0.4,"2008":0.5,"2009":0.2,"2010":0.4,"2011":0.5,"2012":0.3,"2013":0.4,"2014":0.3,"2015":-0.1,"2016":0.6,"2017":0.5,"2018":0.4,"2019":0.3,"2020":0.5,"2021":0.6,"2022":1.1,"2023":0.5,"2024":0.7,"2025":0.8},"New Caledonia":{"1850":-0.6,"1851":0.3,"1852":-0.3,"1853":-0.5,"1854":-0.8,"1855":-0.8,"1856":-1.0,"1857":-0.4,"1858":-0.7,"1859":-0.1,"1860":-0.5,"1861":-0.8,"1862":-0.5,"1863":0.0,"1864":0.4,"1865":0.1,"1866":0.0,"1867":-0.2,"1868":-0.4,"1869":0.0,"1870":0.1,"1871":-0.2,"1872":-0.1,"1873":-0.2,"1874":0.0,"1875":0.0,"1876":0.0,"1877":-0.3,"1878":0.2,"1879":0.1,"1880":-0.2,"1881":-0.4,"1882":-0.2,"1883":-0.6,"1884":-0.9,"1885":-1.0,"1886":-0.5,"1887":-0.6,"1888":-1.0,"1889":-0.3,"1890":-0.2,"1891":-0.3,"1892":-0.2,"1893":0.6,"1894":-0.3,"1895":-0.5,"1896":-0.3,"1897":-0.1,"1898":-0.4,"1899":-0.7,"1900":-0.3,"1901":-0.8,"1902":-1.2,"1903":-0.9,"1904":-1.0,"1905":-1.1,"1906":-0.8,"1907":-0.4,"1908":-0.6,"1909":-0.5,"1910":-0.4,"1911":-0.9,"1912":-0.8,"1913":-0.9,"1914":-0.9,"1915":-0.6,"1916":-0.2,"1917":-0.4,"1918":-0.7,"1919":-0.7,"1920":-0.7,"1921":-0.6,"1922":-0.6,"1923":-0.7,"1924":-0.3,"1925":-0.9,"1926":-0.6,"1927":-0.6,"1928":-0.7,"1929":-0.7,"1930":-1.0,"1931":-0.6,"1932":-0.8,"1933":-0.5,"1934":-0.9,"1935":-0.5,"1936":-0.7,"1937":-0.7,"1938":-0.2,"1939":-0.7,"1940":-0.8,"1941":-0.6,"1942":-0.3,"1943":0.0,"1944":-0.1,"1945":-0.1,"1946":-0.4,"1947":-0.6,"1948":-0.4,"1949":-0.6,"1950":-0.2,"1951":-0.5,"1952":-0.3,"1953":-0.3,"1954":-0.5,"1955":-0.3,"1956":0.0,"1957":-0.4,"1958":-0.2,"1959":-0.4,"1960":-0.3,"1961":-0.5,"1962":-0.2,"1963":-0.5,"1964":-0.2,"1965":-0.8,"1966":-0.8,"1967":-0.4,"1968":-0.3,"1969":-0.3,"1970":0.1,"1971":0.1,"1972":-0.4,"1973":0.4,"1974":0.1,"1975":0.2,"1976":-0.1,"1977":-0.4,"1978":-0.3,"1979":-0.1,"1980":-0.2,"1981":0.0,"1982":-0.5,"1983":-0.1,"1984":-0.1,"1985":-0.1,"1986":-0.1,"1987":-0.2,"1988":0.4,"1989":0.1,"1990":0.1,"1991":-0.4,"1992":-0.4,"1993":-0.5,"1994":-0.6,"1995":0.1,"1996":0.2,"1997":-0.1,"1998":0.8,"1999":0.2,"2000":0.0,"2001":0.3,"2002":0.2,"2003":0.2,"2004":0.1,"2005":0.2,"2006":0.0,"2007":0.1,"2008":0.3,"2009":0.2,"2010":0.4,"2011":0.3,"2012":0.0,"2013":0.2,"2014":0.1,"2015":0.0,"2016":0.7,"2017":0.5,"2018":0.3,"2019":0.2,"2020":0.5,"2021":0.4,"2022":0.9,"2023":0.4,"2024":0.7,"2025":0.8},"Guam":{"1850":-0.2,"1851":0.1,"1852":0.0,"1853":-0.2,"1854":-0.2,"1855":-0.6,"1856":-0.3,"1857":-0.1,"1858":-0.6,"1859":0.0,"1860":-0.4,"1861":-0.7,"1862":-0.6,"1863":-0.3,"1864":-0.2,"1865":-0.1,"1866":0.0,"1867":-0.2,"1868":-0.2,"1869":0.1,"1870":0.1,"1871":-0.2,"1872":0.0,"1873":0.0,"1874":-0.1,"1875":-0.2,"1876":0.0,"1877":-0.1,"1878":0.2,"1879":-0.1,"1880":-0.6,"1881":-0.1,"1882":-0.1,"1883":-0.5,"1884":-0.6,"1885":-0.7,"1886":-0.4,"1887":0.1,"1888":-0.2,"1889":0.0,"1890":0.1,"1891":0.3,"1892":0.2,"1893":0.0,"1894":0.0,"1895":0.0,"1896":0.0,"1897":0.4,"1898":0.0,"1899":-0.4,"1900":-0.1,"1901":0.0,"1902":-0.4,"1903":-0.7,"1904":-0.6,"1905":-0.7,"1906":-0.5,"1907":-0.4,"1908":-0.3,"1909":-0.4,"1910":-0.2,"1911":-0.6,"1912":-0.7,"1913":-0.7,"1914":-0.7,"1915":-0.5,"1916":-0.4,"1917":-0.5,"1918":-0.8,"1919":-0.9,"1920":-0.8,"1921":-0.1,"1922":-0.2,"1923":-0.6,"1924":-0.4,"1925":-0.2,"1926":-0.3,"1927":-0.1,"1928":-0.4,"1929":-0.4,"1930":-0.6,"1931":-0.3,"1932":-0.5,"1933":-0.4,"1934":-0.3,"1935":-0.4,"1936":-0.4,"1937":-0.3,"1938":-0.2,"1939":-0.3,"1940":-0.4,"1941":-0.3,"1942":-0.4,"1943":0.2,"1944":0.2,"1945":0.4,"1946":0.3,"1947":0.0,"1948":-0.1,"1949":-0.2,"1950":-0.1,"1951":0.0,"1952":-0.2,"1953":-0.1,"1954":-0.2,"1955":-0.3,"1956":-0.3,"1957":-0.3,"1958":-0.5,"1959":-0.3,"1960":-0.1,"1961":-0.1,"1962":-0.2,"1963":-0.1,"1964":-0.1,"1965":-0.4,"1966":-0.3,"1967":-0.2,"1968":-0.2,"1969":-0.1,"1970":0.0,"1971":0.0,"1972":-0.6,"1973":-0.2,"1974":-0.1,"1975":-0.2,"1976":-0.2,"1977":-0.2,"1978":-0.2,"1979":-0.2,"1980":-0.2,"1981":0.1,"1982":-0.2,"1983":-0.2,"1984":0.2,"1985":0.0,"1986":0.0,"1987":-0.1,"1988":0.3,"1989":0.2,"1990":-0.1,"1991":-0.2,"1992":-0.4,"1993":-0.4,"1994":0.0,"1995":0.2,"1996":0.4,"1997":0.1,"1998":0.1,"1999":0.4,"2000":0.4,"2001":0.5,"2002":0.3,"2003":0.3,"2004":0.2,"2005":0.2,"2006":0.2,"2007":0.4,"2008":0.5,"2009":0.4,"2010":0.3,"2011":0.5,"2012":0.4,"2013":0.5,"2014":0.5,"2015":0.2,"2016":0.4,"2017":0.8,"2018":0.6,"2019":0.6,"2020":0.7,"2021":0.8,"2022":0.7,"2023":0.6,"2024":0.6,"2025":0.9}},"sstRegional":[[1850,-0.1381],[1851,-0.1333],[1852,-0.0524],[1853,0.0238],[1854,-0.0952],[1855,-0.319],[1856,-0.3429],[1857,-0.2571],[1858,-0.2952],[1859,0.0952],[1860,-0.2381],[1861,-0.5238],[1862,-0.3667],[1863,-0.2238],[1864,-0.1],[1865,-0.1143],[1866,-0.119],[1867,-0.1667],[1868,-0.1714],[1869,-0.0143],[1870,-0.1714],[1871,-0.081],[1872,-0.0571],[1873,-0.2286],[1874,-0.0857],[1875,-0.1667],[1876,-0.1238],[1877,-0.1857],[1878,-0.0524],[1879,-0.1476],[1880,-0.2714],[1881,0.0143],[1882,0.0667],[1883,-0.3905],[1884,-0.5048],[1885,-0.6476],[1886,-0.5048],[1887,-0.3429],[1888,-0.3],[1889,-0.1762],[1890,-0.3143],[1891,-0.1714],[1892,-0.1619],[1893,-0.2571],[1894,-0.2667],[1895,-0.1952],[1896,-0.2381],[1897,-0.0714],[1898,-0.2333],[1899,-0.2571],[1900,-0.0571],[1901,-0.081],[1902,-0.5286],[1903,-0.4714],[1904,-0.6429],[1905,-0.5952],[1906,-0.4143],[1907,-0.4143],[1908,-0.5],[1909,-0.6286],[1910,-0.6],[1911,-0.6381],[1912,-0.5143],[1913,-0.6095],[1914,-0.4905],[1915,-0.319],[1916,-0.4143],[1917,-0.8286],[1918,-0.5905],[1919,-0.8381],[1920,-0.5333],[1921,-0.419],[1922,-0.2714],[1923,-0.4476],[1924,-0.2857],[1925,-0.4238],[1926,-0.3667],[1927,-0.3714],[1928,-0.4],[1929,-0.3905],[1930,-0.4762],[1931,-0.3476],[1932,-0.3952],[1933,-0.5333],[1934,-0.5286],[1935,-0.4048],[1936,-0.3857],[1937,-0.3667],[1938,-0.3952],[1939,-0.481],[1940,-0.2762],[1941,-0.119],[1942,-0.1238],[1943,0.0714],[1944,0.1381],[1945,0.0714],[1946,0.0095],[1947,-0.0952],[1948,-0.3095],[1949,-0.3524],[1950,-0.3],[1951,-0.1714],[1952,-0.0905],[1953,-0.081],[1954,-0.2381],[1955,-0.3952],[1956,-0.2667],[1957,-0.2524],[1958,-0.1714],[1959,-0.181],[1960,-0.1524],[1961,-0.1667],[1962,-0.181],[1963,-0.1333],[1964,-0.2238],[1965,-0.419],[1966,-0.2],[1967,-0.2524],[1968,-0.1238],[1969,0.0667],[1970,-0.0143],[1971,-0.2238],[1972,-0.2524],[1973,0.0143],[1974,-0.2],[1975,-0.2952],[1976,-0.2762],[1977,-0.1571],[1978,-0.1333],[1979,-0.0905],[1980,-0.0048],[1981,-0.0429],[1982,-0.0857],[1983,-0.2143],[1984,-0.0286],[1985,-0.1286],[1986,-0.081],[1987,-0.0857],[1988,0.1857],[1989,-0.0286],[1990,0.081],[1991,0.1],[1992,-0.0429],[1993,-0.1762],[1994,0.0286],[1995,0.2429],[1996,0.1905],[1997,-0.0],[1998,0.0571],[1999,0.1048],[2000,0.1667],[2001,0.281],[2002,0.3667],[2003,0.4143],[2004,0.3905],[2005,0.4],[2006,0.319],[2007,0.3952],[2008,0.181],[2009,0.3714],[2010,0.3571],[2011,0.2095],[2012,0.2905],[2013,0.419],[2014,0.4714],[2015,0.3],[2016,0.5905],[2017,0.5952],[2018,0.5238],[2019,0.5714],[2020,0.6095],[2021,0.4762],[2022,0.4762],[2023,0.5714],[2024,0.7333],[2025,0.6381]],"sstFit":[[1850,-0.0778],[1851,-0.0837],[1852,-0.0896],[1853,-0.0954],[1854,-0.1013],[1855,-0.1072],[1856,-0.1131],[1857,-0.119],[1858,-0.1249],[1859,-0.1307],[1860,-0.1366],[1861,-0.1425],[1862,-0.1484],[1863,-0.1543],[1864,-0.1602],[1865,-0.166],[1866,-0.1719],[1867,-0.1778],[1868,-0.1837],[1869,-0.1896],[1870,-0.1955],[1871,-0.2013],[1872,-0.2072],[1873,-0.2131],[1874,-0.219],[1875,-0.2249],[1876,-0.2308],[1877,-0.2366],[1878,-0.2425],[1879,-0.2484],[1880,-0.2543],[1881,-0.2602],[1882,-0.2661],[1883,-0.2719],[1884,-0.2778],[1885,-0.2837],[1886,-0.2896],[1887,-0.2955],[1888,-0.3014],[1889,-0.3072],[1890,-0.3131],[1891,-0.319],[1892,-0.3249],[1893,-0.3308],[1894,-0.3367],[1895,-0.3425],[1896,-0.3484],[1897,-0.3543],[1898,-0.3602],[1899,-0.3661],[1900,-0.372],[1901,-0.3778],[1902,-0.3837],[1903,-0.3896],[1904,-0.3955],[1905,-0.4014],[1906,-0.4073],[1907,-0.4131],[1908,-0.419],[1909,-0.4249],[1910,-0.4308],[1911,-0.4367],[1912,-0.4426],[1913,-0.4484],[1914,-0.4543],[1915,-0.4602],[1916,-0.4544],[1917,-0.4487],[1918,-0.4429],[1919,-0.4372],[1920,-0.4314],[1921,-0.4256],[1922,-0.4199],[1923,-0.4141],[1924,-0.4083],[1925,-0.4026],[1926,-0.3968],[1927,-0.391],[1928,-0.3853],[1929,-0.3795],[1930,-0.3738],[1931,-0.368],[1932,-0.3622],[1933,-0.3565],[1934,-0.3507],[1935,-0.3449],[1936,-0.3392],[1937,-0.3334],[1938,-0.3276],[1939,-0.3219],[1940,-0.3161],[1941,-0.3103],[1942,-0.3046],[1943,-0.2988],[1944,-0.2931],[1945,-0.2873],[1946,-0.2815],[1947,-0.2758],[1948,-0.27],[1949,-0.2642],[1950,-0.2585],[1951,-0.2527],[1952,-0.2469],[1953,-0.2412],[1954,-0.2354],[1955,-0.2296],[1956,-0.2239],[1957,-0.2181],[1958,-0.2124],[1959,-0.2066],[1960,-0.2008],[1961,-0.1951],[1962,-0.1893],[1963,-0.1835],[1964,-0.1778],[1965,-0.172],[1966,-0.1662],[1967,-0.1605],[1968,-0.1547],[1969,-0.1489],[1970,-0.1432],[1971,-0.1374],[1972,-0.1317],[1973,-0.1259],[1974,-0.1201],[1975,-0.1144],[1976,-0.1086],[1977,-0.1028],[1978,-0.0971],[1979,-0.0913],[1980,-0.0855],[1981,-0.0798],[1982,-0.074],[1983,-0.0682],[1984,-0.0625],[1985,-0.0567],[1986,-0.0395],[1987,-0.0224],[1988,-0.0052],[1989,0.012],[1990,0.0291],[1991,0.0463],[1992,0.0635],[1993,0.0807],[1994,0.0978],[1995,0.115],[1996,0.1322],[1997,0.1493],[1998,0.1665],[1999,0.1837],[2000,0.2009],[2001,0.218],[2002,0.2352],[2003,0.2524],[2004,0.2695],[2005,0.2867],[2006,0.3039],[2007,0.3211],[2008,0.3382],[2009,0.3554],[2010,0.3726],[2011,0.3897],[2012,0.4069],[2013,0.4241],[2014,0.4413],[2015,0.4584],[2016,0.4756],[2017,0.4928],[2018,0.5099],[2019,0.5271],[2020,0.5443],[2021,0.5615],[2022,0.5786],[2023,0.5958],[2024,0.613],[2025,0.6301]],"eras":[-0.059,0.058,0.172],"rain":{"Tokelau":{"1979":-14.2,"1980":-8.3,"1981":6.1,"1982":-5.5,"1983":14.7,"1984":0.6,"1985":-6.8,"1986":1.7,"1987":35.4,"1988":-6.3,"1989":-9.9,"1990":0.7,"1991":-13.9,"1992":8.1,"1993":10.5,"1994":8.5,"1995":12.4,"1996":-19.6,"1997":21.0,"1998":19.1,"1999":-31.9,"2000":-32.1,"2001":9.1,"2002":-3.1,"2003":16.3,"2004":9.6,"2005":5.0,"2006":-4.7,"2007":19.3,"2008":-31.2,"2009":-24.9,"2010":-3.8,"2011":-38.3,"2012":-4.8,"2013":20.1,"2014":9.2,"2015":22.4,"2016":10.0,"2017":-5.9,"2018":-16.7,"2019":18.3,"2020":12.2,"2021":-38.8,"2022":-30.8,"2023":-9.6,"2024":11.0,"2025":-5.6},"Marshall Islands":{"1979":-2.2,"1980":-1.7,"1981":-5.5,"1982":3.0,"1983":-24.6,"1984":-25.9,"1985":-5.2,"1986":10.9,"1987":2.7,"1988":-15.7,"1989":3.4,"1990":9.1,"1991":12.1,"1992":-11.0,"1993":5.6,"1994":0.3,"1995":3.7,"1996":3.2,"1997":20.7,"1998":-20.2,"1999":-10.9,"2000":-1.7,"2001":-7.3,"2002":13.5,"2003":3.7,"2004":9.1,"2005":-6.5,"2006":-1.7,"2007":-8.0,"2008":-16.4,"2009":-6.4,"2010":-6.4,"2011":2.8,"2012":-15.3,"2013":-5.2,"2014":2.2,"2015":17.9,"2016":-6.5,"2017":-3.2,"2018":17.2,"2019":7.0,"2020":8.0,"2021":-2.1,"2022":8.1,"2023":8.9,"2024":3.0,"2025":-4.3},"Wallis and Futuna":{"1979":-19.2,"1980":-12.8,"1981":-9.4,"1982":-1.8,"1983":-24.8,"1984":-5.2,"1985":-7.3,"1986":-5.7,"1987":-22.4,"1988":8.8,"1989":-16.9,"1990":0.8,"1991":-5.9,"1992":-5.8,"1993":2.6,"1994":-7.6,"1995":2.3,"1996":-10.0,"1997":4.7,"1998":-20.5,"1999":6.6,"2000":-5.5,"2001":-10.4,"2002":-5.3,"2003":-7.8,"2004":-0.4,"2005":-3.8,"2006":16.8,"2007":8.4,"2008":-8.7,"2009":2.4,"2010":-2.6,"2011":-11.6,"2012":-3.4,"2013":13.9,"2014":-5.1,"2015":-14.9,"2016":-5.2,"2017":14.8,"2018":8.0,"2019":37.7,"2020":16.1,"2021":3.3,"2022":-10.9,"2023":-3.1,"2024":-3.4,"2025":13.8},"Solomon Islands":{"1979":5.5,"1980":6.8,"1981":-6.7,"1982":7.5,"1983":-2.8,"1984":1.5,"1985":7.4,"1986":-0.5,"1987":-22.0,"1988":1.7,"1989":-11.0,"1990":-7.9,"1991":-3.3,"1992":-18.9,"1993":-20.4,"1994":-8.4,"1995":-12.0,"1996":5.1,"1997":-28.0,"1998":-2.3,"1999":-5.1,"2000":4.4,"2001":-0.7,"2002":1.4,"2003":-10.5,"2004":3.5,"2005":-10.3,"2006":8.7,"2007":-6.2,"2008":-8.4,"2009":8.0,"2010":-3.9,"2011":-4.3,"2012":18.1,"2013":7.5,"2014":12.2,"2015":13.2,"2016":-1.5,"2017":12.0,"2018":14.8,"2019":21.5,"2020":13.8,"2021":10.3,"2022":-3.2,"2023":24.4,"2024":18.0,"2025":6.1},"Northern Mariana Islands":{"1979":-7.6,"1980":-5.9,"1981":-5.9,"1982":-6.0,"1983":-20.3,"1984":1.1,"1985":-2.2,"1986":3.4,"1987":-10.8,"1988":-16.5,"1989":15.0,"1990":17.7,"1991":17.0,"1992":-2.6,"1993":-18.2,"1994":3.6,"1995":-6.8,"1996":5.5,"1997":3.6,"1998":-27.0,"1999":-11.3,"2000":-13.2,"2001":-2.1,"2002":11.9,"2003":3.6,"2004":25.3,"2005":6.1,"2006":8.3,"2007":2.5,"2008":-18.6,"2009":6.2,"2010":-14.8,"2011":6.1,"2012":-3.8,"2013":-7.9,"2014":14.9,"2015":17.1,"2016":-4.2,"2017":-7.5,"2018":15.3,"2019":3.4,"2020":-12.4,"2021":-8.9,"2022":-2.5,"2023":14.0,"2024":0.2,"2025":-12.8},"Pitcairn":{"1979":6.8,"1980":-2.1,"1981":-6.4,"1982":0.3,"1983":-6.2,"1984":4.1,"1985":3.0,"1986":-1.6,"1987":7.5,"1988":-13.4,"1989":-4.0,"1990":2.7,"1991":5.4,"1992":12.7,"1993":3.5,"1994":15.0,"1995":1.4,"1996":-7.2,"1997":-3.0,"1998":-3.5,"1999":-9.8,"2000":-8.5,"2001":3.7,"2002":3.6,"2003":7.6,"2004":10.6,"2005":11.8,"2006":-11.9,"2007":2.0,"2008":-12.5,"2009":-2.9,"2010":-9.8,"2011":-28.3,"2012":24.2,"2013":3.0,"2014":-5.7,"2015":-5.3,"2016":6.4,"2017":-3.5,"2018":-10.5,"2019":23.9,"2020":-12.3,"2021":-12.2,"2022":-10.9,"2023":0.6,"2024":-5.1,"2025":-7.6},"Vanuatu":{"1979":2.5,"1980":-3.3,"1981":-2.8,"1982":-0.6,"1983":-21.6,"1984":8.3,"1985":12.2,"1986":-0.9,"1987":-15.2,"1988":29.9,"1989":9.2,"1990":-9.3,"1991":-9.9,"1992":-11.6,"1993":-24.3,"1994":-11.7,"1995":-18.3,"1996":4.5,"1997":-16.9,"1998":0.9,"1999":22.6,"2000":23.6,"2001":1.8,"2002":8.6,"2003":-7.6,"2004":-13.6,"2005":-3.5,"2006":-7.3,"2007":7.2,"2008":7.4,"2009":5.9,"2010":1.1,"2011":17.7,"2012":17.7,"2013":9.0,"2014":0.4,"2015":-3.4,"2016":-13.3,"2017":1.7,"2018":-0.3,"2019":-2.4,"2020":14.1,"2021":11.9,"2022":33.7,"2023":8.7,"2024":8.0,"2025":-0.3},"Guam":{"1979":-9.5,"1980":-6.5,"1981":-9.3,"1982":-6.1,"1983":-20.8,"1984":2.4,"1985":-2.2,"1986":1.7,"1987":-11.0,"1988":-18.5,"1989":1.2,"1990":13.2,"1991":7.0,"1992":-5.0,"1993":-15.0,"1994":0.3,"1995":-8.1,"1996":3.7,"1997":16.1,"1998":-27.0,"1999":-8.6,"2000":-8.2,"2001":-3.9,"2002":8.9,"2003":4.6,"2004":18.3,"2005":4.1,"2006":8.8,"2007":2.5,"2008":-15.5,"2009":11.2,"2010":-13.6,"2011":6.6,"2012":4.8,"2013":-5.5,"2014":5.0,"2015":15.2,"2016":-8.2,"2017":-0.7,"2018":8.5,"2019":6.2,"2020":-12.4,"2021":-5.4,"2022":-1.3,"2023":15.2,"2024":-8.3,"2025":-3.1},"French Polynesia":{"1979":4.7,"1980":-3.3,"1981":2.5,"1982":-7.0,"1983":1.7,"1984":6.9,"1985":4.4,"1986":-0.8,"1987":2.1,"1988":-5.7,"1989":-3.6,"1990":-6.0,"1991":-3.3,"1992":4.5,"1993":-0.6,"1994":1.6,"1995":7.8,"1996":-5.2,"1997":2.3,"1998":20.0,"1999":-9.3,"2000":-2.0,"2001":4.3,"2002":-7.0,"2003":6.8,"2004":5.4,"2005":-2.9,"2006":-2.3,"2007":3.1,"2008":-14.6,"2009":-5.2,"2010":1.9,"2011":-20.4,"2012":-1.5,"2013":1.5,"2014":8.5,"2015":-7.2,"2016":9.7,"2017":1.1,"2018":-5.2,"2019":14.6,"2020":-6.5,"2021":-14.9,"2022":-9.6,"2023":-1.3,"2024":-0.4,"2025":5.3},"Tonga":{"1979":-19.5,"1980":-16.5,"1981":-14.8,"1982":-2.2,"1983":-26.0,"1984":-9.2,"1985":-12.7,"1986":-13.4,"1987":-26.3,"1988":3.0,"1989":-10.7,"1990":-3.6,"1991":-8.0,"1992":-10.5,"1993":0.1,"1994":-16.1,"1995":-3.2,"1996":-4.2,"1997":-3.4,"1998":-21.8,"1999":12.7,"2000":3.9,"2001":-8.0,"2002":-5.3,"2003":-17.0,"2004":-3.5,"2005":4.9,"2006":3.5,"2007":7.6,"2008":3.5,"2009":1.3,"2010":-2.8,"2011":5.3,"2012":8.1,"2013":8.5,"2014":1.1,"2015":-21.5,"2016":-4.3,"2017":16.9,"2018":7.8,"2019":37.0,"2020":7.3,"2021":3.2,"2022":1.4,"2023":-10.9,"2024":-2.0,"2025":16.3},"New Caledonia":{"1979":-4.4,"1980":-0.5,"1981":9.1,"1982":8.3,"1983":-3.1,"1984":16.2,"1985":13.9,"1986":8.9,"1987":-14.8,"1988":35.8,"1989":37.3,"1990":25.8,"1991":-7.4,"1992":6.3,"1993":-10.2,"1994":-12.7,"1995":-0.5,"1996":23.4,"1997":-0.9,"1998":11.3,"1999":34.2,"2000":9.9,"2001":2.0,"2002":8.4,"2003":0.7,"2004":-4.0,"2005":1.1,"2006":1.8,"2007":5.3,"2008":32.4,"2009":9.7,"2010":-10.8,"2011":3.1,"2012":-4.1,"2013":-6.1,"2014":-12.8,"2015":-12.3,"2016":-16.0,"2017":-18.5,"2018":-9.6,"2019":-15.3,"2020":-8.3,"2021":3.5,"2022":14.5,"2023":-8.5,"2024":-9.3,"2025":-6.6},"Micronesia, Federated State of":{"1979":7.0,"1980":0.4,"1981":-6.3,"1982":-2.5,"1983":-44.4,"1984":-26.4,"1985":-6.3,"1986":19.5,"1987":-1.1,"1988":-11.0,"1989":13.3,"1990":5.4,"1991":-10.9,"1992":-33.4,"1993":18.7,"1994":-9.8,"1995":-12.3,"1996":-1.8,"1997":-13.2,"1998":-39.4,"1999":15.2,"2000":8.8,"2001":0.9,"2002":6.2,"2003":-3.1,"2004":8.6,"2005":9.1,"2006":4.8,"2007":0.9,"2008":-1.8,"2009":8.9,"2010":-7.8,"2011":16.9,"2012":1.0,"2013":-2.4,"2014":14.9,"2015":-11.8,"2016":-12.3,"2017":5.0,"2018":-0.4,"2019":34.7,"2020":5.6,"2021":20.1,"2022":4.6,"2023":23.4,"2024":8.7,"2025":5.7},"Niue":{"1979":-18.1,"1980":-12.6,"1981":-6.0,"1982":-6.8,"1983":-24.1,"1984":-5.9,"1985":-4.5,"1986":-13.7,"1987":-18.2,"1988":20.8,"1989":2.0,"1990":-8.8,"1991":-6.7,"1992":-12.7,"1993":-8.5,"1994":-7.6,"1995":-3.0,"1996":5.3,"1997":-23.0,"1998":-23.5,"1999":5.5,"2000":0.8,"2001":-7.9,"2002":-18.7,"2003":-6.6,"2004":-5.4,"2005":14.8,"2006":16.5,"2007":18.5,"2008":19.7,"2009":-1.6,"2010":4.1,"2011":-0.7,"2012":6.7,"2013":-1.0,"2014":-11.0,"2015":-10.4,"2016":2.0,"2017":13.6,"2018":7.2,"2019":20.7,"2020":12.7,"2021":-5.1,"2022":-1.8,"2023":5.0,"2024":1.8,"2025":11.6},"Papua New Guinea":{"1979":-11.1,"1980":-2.8,"1981":5.9,"1982":-17.7,"1983":13.1,"1984":4.5,"1985":10.0,"1986":0.5,"1987":-10.0,"1988":11.8,"1989":3.4,"1990":3.2,"1991":-8.1,"1992":-14.3,"1993":-18.7,"1994":-10.2,"1995":5.0,"1996":-2.8,"1997":-26.7,"1998":12.3,"1999":7.4,"2000":5.5,"2001":6.0,"2002":-5.4,"2003":1.2,"2004":-9.2,"2005":5.2,"2006":1.3,"2007":4.9,"2008":9.6,"2009":5.3,"2010":10.1,"2011":5.2,"2012":7.6,"2013":6.8,"2014":-2.1,"2015":-20.2,"2016":1.2,"2017":7.0,"2018":-3.4,"2019":22.0,"2020":-2.4,"2021":3.2,"2022":-6.4,"2023":0.2,"2024":2.8,"2025":11.5},"Palau":{"1979":-17.6,"1980":-12.2,"1981":-10.4,"1982":-23.1,"1983":-29.4,"1984":14.3,"1985":13.9,"1986":-3.9,"1987":-18.5,"1988":-3.0,"1989":-10.6,"1990":-14.5,"1991":-12.6,"1992":-19.2,"1993":5.2,"1994":3.3,"1995":3.3,"1996":2.7,"1997":-25.4,"1998":-22.5,"1999":17.2,"2000":19.8,"2001":13.6,"2002":-11.7,"2003":-1.2,"2004":-6.6,"2005":7.6,"2006":1.5,"2007":-8.8,"2008":-1.1,"2009":20.5,"2010":-20.3,"2011":31.6,"2012":13.5,"2013":0.6,"2014":21.1,"2015":-25.0,"2016":-6.3,"2017":15.6,"2018":-8.4,"2019":-9.1,"2020":1.0,"2021":15.3,"2022":9.3,"2023":7.9,"2024":-0.7,"2025":9.7},"Samoa":{"1979":-19.5,"1980":-8.4,"1981":0.2,"1982":-9.8,"1983":-19.6,"1984":0.9,"1985":-7.5,"1986":-5.5,"1987":-8.2,"1988":10.4,"1989":-17.3,"1990":2.8,"1991":-8.0,"1992":-4.8,"1993":3.3,"1994":3.9,"1995":3.0,"1996":-6.7,"1997":1.1,"1998":-21.2,"1999":0.0,"2000":-2.8,"2001":1.2,"2002":-2.4,"2003":-5.6,"2004":-7.0,"2005":-5.1,"2006":14.9,"2007":6.3,"2008":-11.1,"2009":-9.4,"2010":-1.9,"2011":-11.1,"2012":-6.9,"2013":7.6,"2014":0.0,"2015":0.7,"2016":0.3,"2017":12.6,"2018":1.3,"2019":20.4,"2020":27.3,"2021":-18.1,"2022":-20.7,"2023":-3.2,"2024":-1.8,"2025":13.9},"American Samoa":{"1979":-16.4,"1980":-10.2,"1981":0.7,"1982":-13.2,"1983":-16.6,"1984":2.5,"1985":-7.7,"1986":-5.5,"1987":-4.0,"1988":9.4,"1989":-13.5,"1990":-0.3,"1991":-11.1,"1992":-9.2,"1993":2.1,"1994":6.7,"1995":8.6,"1996":-5.2,"1997":0.8,"1998":-18.9,"1999":-4.6,"2000":-8.3,"2001":0.6,"2002":-6.9,"2003":2.5,"2004":-7.0,"2005":-0.3,"2006":11.3,"2007":10.7,"2008":-10.9,"2009":-11.1,"2010":1.6,"2011":-11.2,"2012":-7.9,"2013":4.9,"2014":1.0,"2015":5.7,"2016":5.2,"2017":8.2,"2018":0.8,"2019":21.2,"2020":20.8,"2021":-24.7,"2022":-22.5,"2023":-3.2,"2024":2.9,"2025":11.7},"Tuvalu":{"1979":-6.4,"1980":-1.6,"1981":-7.6,"1982":4.3,"1983":14.1,"1984":-4.9,"1985":-5.8,"1986":-0.5,"1987":37.3,"1988":2.7,"1989":-15.3,"1990":-2.3,"1991":-1.6,"1992":10.7,"1993":24.6,"1994":10.2,"1995":8.5,"1996":-13.2,"1997":21.7,"1998":25.5,"1999":-35.6,"2000":-34.5,"2001":-12.8,"2002":6.8,"2003":7.3,"2004":2.3,"2005":-1.7,"2006":-2.7,"2007":3.7,"2008":-29.7,"2009":-4.3,"2010":-8.0,"2011":-41.5,"2012":-8.0,"2013":8.5,"2014":-3.7,"2015":29.4,"2016":5.9,"2017":-1.6,"2018":-9.0,"2019":37.7,"2020":5.2,"2021":-15.2,"2022":-35.8,"2023":-12.0,"2024":4.5,"2025":-15.6},"Cook Islands":{"1979":-7.4,"1980":-4.7,"1981":5.5,"1982":-18.8,"1983":-11.2,"1984":6.8,"1985":0.1,"1986":-6.3,"1987":0.5,"1988":22.2,"1989":-11.6,"1990":-4.7,"1991":-9.9,"1992":-6.0,"1993":0.5,"1994":-1.4,"1995":6.7,"1996":2.3,"1997":-4.1,"1998":-5.8,"1999":1.3,"2000":-13.9,"2001":3.6,"2002":-8.3,"2003":12.4,"2004":2.0,"2005":12.4,"2006":3.5,"2007":4.0,"2008":-7.3,"2009":-3.8,"2010":0.7,"2011":-14.2,"2012":-1.1,"2013":-3.4,"2014":3.1,"2015":-5.9,"2016":11.1,"2017":-0.6,"2018":1.1,"2019":21.2,"2020":-0.1,"2021":-13.8,"2022":-8.1,"2023":-5.2,"2024":3.7,"2025":-7.2},"Fiji":{"1979":4.7,"1980":11.9,"1981":4.7,"1982":7.7,"1983":-11.1,"1984":3.6,"1985":12.7,"1986":8.6,"1987":-21.8,"1988":6.5,"1989":6.2,"1990":0.2,"1991":-9.4,"1992":-15.3,"1993":-4.6,"1994":-9.7,"1995":-10.9,"1996":10.3,"1997":8.9,"1998":-24.2,"1999":19.6,"2000":21.7,"2001":-1.8,"2002":-0.1,"2003":-17.8,"2004":-10.0,"2005":-5.1,"2006":-10.9,"2007":10.9,"2008":5.4,"2009":14.4,"2010":0.2,"2011":10.5,"2012":23.9,"2013":8.1,"2014":-14.4,"2015":-21.0,"2016":-0.7,"2017":-2.1,"2018":1.8,"2019":19.9,"2020":2.1,"2021":8.1,"2022":12.7,"2023":-3.3,"2024":16.6,"2025":1.3},"Nauru":{"1979":21.6,"1980":25.5,"1981":4.5,"1982":16.2,"1983":-13.5,"1984":-31.8,"1985":-11.1,"1986":18.2,"1987":37.9,"1988":-25.4,"1989":-34.2,"1990":27.4,"1991":26.5,"1992":40.5,"1993":53.6,"1994":7.8,"1995":-14.3,"1996":-43.3,"1997":28.9,"1998":-30.2,"1999":-54.4,"2000":-44.2,"2001":-1.4,"2002":46.1,"2003":9.4,"2004":26.4,"2005":10.0,"2006":-4.1,"2007":-11.8,"2008":-49.1,"2009":3.6,"2010":-6.8,"2011":-42.4,"2012":-9.6,"2013":-17.5,"2014":22.7,"2015":49.5,"2016":-5.0,"2017":-22.2,"2018":-9.7,"2019":66.6,"2020":-25.3,"2021":-41.1,"2022":-48.0,"2023":11.1,"2024":-13.5,"2025":-41.8},"Kiribati":{"1979":2.6,"1980":1.5,"1981":-2.8,"1982":19.2,"1983":11.1,"1984":-19.9,"1985":-12.6,"1986":-0.4,"1987":41.9,"1988":-14.0,"1989":-19.7,"1990":10.4,"1991":15.3,"1992":37.3,"1993":19.9,"1994":1.5,"1995":-18.4,"1996":-25.2,"1997":40.4,"1998":-16.9,"1999":-29.7,"2000":-26.1,"2001":-12.9,"2002":25.4,"2003":5.0,"2004":-1.5,"2005":-2.6,"2006":-0.3,"2007":-6.8,"2008":-22.2,"2009":2.9,"2010":18.5,"2011":-20.2,"2012":-8.7,"2013":-15.0,"2014":4.9,"2015":50.3,"2016":13.0,"2017":-24.0,"2018":-20.1,"2019":27.3,"2020":-10.9,"2021":-20.9,"2022":-28.0,"2023":16.7,"2024":-4.6,"2025":-22.3}},"oni":{"1950":-0.883,"1951":0.433,"1952":0.017,"1953":0.6,"1954":-0.333,"1955":-0.942,"1956":-0.558,"1957":0.775,"1958":0.725,"1959":0.192,"1960":0.05,"1961":-0.017,"1962":-0.167,"1963":0.55,"1964":-0.375,"1965":0.825,"1966":0.292,"1967":-0.317,"1968":0.075,"1969":0.683,"1970":-0.292,"1971":-0.875,"1972":0.808,"1973":-0.575,"1974":-0.892,"1975":-1.0,"1976":-0.017,"1977":0.533,"1978":-0.058,"1979":0.3,"1980":0.217,"1981":-0.258,"1982":0.917,"1983":0.45,"1984":-0.542,"1985":-0.575,"1986":0.267,"1987":1.183,"1988":-0.875,"1989":-0.608,"1990":0.283,"1991":0.658,"1992":0.625,"1993":0.358,"1994":0.375,"1995":-0.2,"1996":-0.4,"1997":1.133,"1998":0.042,"1999":-1.058,"2000":-0.775,"2001":-0.283,"2002":0.533,"2003":0.233,"2004":0.383,"2005":0.042,"2006":0.042,"2007":-0.608,"2008":-0.808,"2009":0.267,"2010":-0.425,"2011":-0.767,"2012":-0.058,"2013":-0.242,"2014":0.242,"2015":1.475,"2016":0.492,"2017":-0.058,"2018":0.142,"2019":0.65,"2020":-0.217,"2021":-0.65,"2022":-0.792,"2023":0.825,"2024":0.417,"2025":-0.283,"2026":0.383},"wetSide":[[1979,0.9],[1980,4.27],[1981,0.05],[1982,8.55],[1983,6.6],[1984,-14.0],[1985,-9.07],[1986,4.75],[1987,38.12],[1988,-10.75],[1989,-19.78],[1990,9.05],[1991,6.58],[1992,24.15],[1993,27.15],[1994,7.0],[1995,-2.95],[1996,-25.32],[1997,28.0],[1998,-0.62],[1999,-37.9],[2000,-34.23],[2001,-4.5],[2002,18.8],[2003,9.5],[2004,9.2],[2005,2.67],[2006,-2.95],[2007,1.1],[2008,-33.05],[2009,-5.67],[2010,-0.02],[2011,-35.6],[2012,-7.77],[2013,-0.97],[2014,8.28],[2015,37.9],[2016,5.97],[2017,-13.43],[2018,-13.88],[2019,37.48],[2020,-4.7],[2021,-29.0],[2022,-35.65],[2023,1.55],[2024,-0.65],[2025,-21.32]],"drySide":[[1979,-7.49],[1980,-3.17],[1981,-1.3],[1982,-1.7],[1983,-11.9],[1984,2.49],[1985,3.94],[1986,-2.0],[1987,-17.06],[1988,14.99],[1989,2.39],[1990,0.3],[1991,-7.6],[1992,-10.22],[1993,-10.41],[1994,-9.06],[1995,-4.99],[1996,4.36],[1997,-11.11],[1998,-8.56],[1999,12.11],[2000,8.38],[2001,-0.93],[2002,-1.69],[2003,-7.9],[2004,-6.15],[2005,0.25],[2006,3.56],[2007,6.81],[2008,7.31],[2009,4.2],[2010,-0.49],[2011,3.21],[2012,8.89],[2013,5.05],[2014,-3.33],[2015,-9.36],[2016,-4.04],[2017,5.4],[2018,2.45],[2019,15.47],[2020,8.32],[2021,2.12],[2022,3.78],[2023,1.55],[2024,4.26],[2025,6.73]],"spcz":{"Papua New Guinea":"dry","Solomon Islands":"dry","New Caledonia":"dry","Vanuatu":"dry","Fiji":"dry","Tonga":"dry","Samoa":"dry","Niue":"dry","Kiribati":"wet","Tuvalu":"wet","Nauru":"wet","Tokelau":"wet"},"ratio":{"jump":11.9,"trend":2.5,"ratio":4.8},"network":[[1889,1.0],[1890,1.0],[1891,1.0],[1892,1.0],[1893,1.0],[1894,1.0],[1895,1.0],[1896,1.0],[1897,1.0],[1898,1.0],[1899,1.0],[1900,1.0],[1901,1.0],[1902,1.0],[1903,1.0],[1904,1.0],[1905,1.0],[1906,1.0],[1907,1.0],[1908,1.0],[1909,1.0],[1910,1.0],[1911,1.0],[1912,1.0],[1913,1.0],[1914,1.0],[1915,1.0],[1916,1.0],[1917,1.0],[1918,1.0],[1919,1.0],[1920,1.0],[1921,1.0],[1922,1.0],[1923,1.0],[1924,1.0],[1925,1.0],[1926,1.0],[1927,1.0],[1928,1.0],[1929,1.0],[1930,2.0],[1931,2.0],[1932,3.0],[1933,4.0],[1934,4.0],[1935,5.0],[1936,5.0],[1937,5.0],[1938,5.0],[1939,5.0],[1940,5.0],[1941,8.0],[1942,9.0],[1943,9.0],[1944,9.0],[1945,10.0],[1946,12.0],[1947,14.0],[1948,17.0],[1949,18.0],[1950,19.0],[1951,22.0],[1952,24.0],[1953,26.0],[1954,26.0],[1955,26.0],[1956,27.0],[1957,28.0],[1958,28.0],[1959,28.0],[1960,29.0],[1961,30.0],[1962,32.0],[1963,33.0],[1964,33.0],[1965,33.0],[1966,33.0],[1967,33.0],[1968,33.0],[1969,34.0],[1970,34.0],[1971,34.0],[1972,35.0],[1973,36.0],[1974,37.0],[1975,38.0],[1976,38.0],[1977,38.0],[1978,39.0],[1979,39.0],[1980,39.0],[1981,39.0],[1982,39.0],[1983,41.0],[1984,42.0],[1985,42.0],[1986,43.0],[1987,43.0],[1988,44.0],[1989,44.0],[1990,44.0],[1991,44.0],[1992,44.0],[1993,44.0],[1994,45.0],[1995,45.0],[1996,46.0],[1997,47.0],[1998,47.0],[1999,47.0],[2000,47.0],[2001,47.0],[2002,47.0],[2003,47.0],[2004,47.0],[2005,47.0],[2006,47.0],[2007,48.0],[2008,48.0],[2009,48.0],[2010,48.0],[2011,49.0],[2012,50.0],[2013,51.0],[2014,51.0],[2015,51.0],[2016,55.0],[2017,55.0],[2018,55.0],[2019,55.0],[2020,55.0],[2021,55.0],[2022,55.0],[2023,55.0],[2024,55.0],[2025,56.0],[2026,56.0]],"latestStations":{"Tonga":4.0,"French Polynesia":7.0,"Vanuatu":6.0,"Pitcairn":0.0,"New Caledonia":4.0,"Micronesia, Federated State of":3.0,"Samoa":2.0,"Palau":1.0,"Niue":0.0,"Tuvalu":3.0,"Papua New Guinea":6.0,"Kiribati":4.0,"Nauru":0.0,"Cook Islands":2.0,"Fiji":8.0,"Marshall Islands":2.0,"Tokelau":1.0,"Solomon Islands":3.0},"latestYear":2026,"area":{"French Polynesia":{"iso2":"PF","land":3471.0,"eez":4792821.532757853,"ratio":1381.0},"Kiribati":{"iso2":"KI","land":810.0,"eez":3456282.0417710915,"ratio":4267.0},"Micronesia (Federated States of)":{"iso2":"FM","land":700.0,"eez":3026487.017179225,"ratio":4324.0},"Papua New Guinea":{"iso2":"PG","land":452860.0,"eez":2874684.621944593,"ratio":6.0},"Marshall Islands":{"iso2":"MH","land":180.0,"eez":2012375.7667439762,"ratio":11180.0},"Cook Islands":{"iso2":"CK","land":240.0,"eez":1976726.813180871,"ratio":8236.0},"Solomon Islands":{"iso2":"SB","land":27990.0,"eez":1640434.9066771634,"ratio":59.0},"Fiji":{"iso2":"FJ","land":18270.0,"eez":1307154.7987895468,"ratio":72.0},"New Caledonia":{"iso2":"NC","land":18280.0,"eez":1201572.9494414495,"ratio":66.0},"Pitcairn":{"iso2":"PN","land":47.0,"eez":844160.1196993645,"ratio":17961.0},"Northern Mariana Islands":{"iso2":"MP","land":460.0,"eez":766523.1864317433,"ratio":1666.0},"Tuvalu":{"iso2":"TV","land":30.0,"eez":756356.7193114647,"ratio":25212.0},"Tonga":{"iso2":"TO","land":720.0,"eez":668721.3146317805,"ratio":929.0},"Vanuatu":{"iso2":"VU","land":12190.0,"eez":637910.4582518582,"ratio":52.0},"Palau":{"iso2":"PW","land":460.0,"eez":618016.5830779443,"ratio":1344.0},"American Samoa":{"iso2":"AS","land":200.0,"eez":407543.8985981119,"ratio":2038.0},"Tokelau":{"iso2":"TK","land":10.0,"eez":322098.0382732196,"ratio":32210.0},"Niue":{"iso2":"NU","land":260.0,"eez":319357.4297742817,"ratio":1228.0},"Nauru":{"iso2":"NR","land":20.0,"eez":310667.89111819,"ratio":15533.0},"Wallis and Futuna":{"iso2":"WF","land":140.0,"eez":263931.57218295266,"ratio":1885.0},"Guam":{"iso2":"GU","land":540.0,"eez":209580.39080160463,"ratio":388.0},"Samoa":{"iso2":"WS","land":2780.0,"eez":133837.26091858913,"ratio":48.0}},"seaLevelCountries":["American Samoa","Cook Islands","Fiji","French Polynesia","Guam","Kiribati","Marshall Islands","Micronesia, Federated State of","Nauru","New Caledonia","Niue","Northern Mariana Islands","Palau","Papua New Guinea","Samoa","Solomon Islands","Tokelau","Tonga","Tuvalu","Vanuatu","Wallis and Futuna"],"pngGauges":[{"id":"PPM00092047","name":"NADZAB","lat":-6.57,"lon":146.726,"elev":72.8,"first":1997,"last":2025},{"id":"PP000092035","name":"PORT MORESBY W.O.","lat":-9.383,"lon":147.217,"elev":48.0,"first":1970,"last":2025},{"id":"PPW00080431","name":"MANUS ISLAND NF","lat":-2.0167,"lon":147.4333,"elev":44.2,"first":1945,"last":1947},{"id":"PPM00092001","name":"KIUNGA W.O.","lat":-6.083,"lon":141.183,"elev":35.0,"first":1997,"last":2015},{"id":"PPM00092077","name":"GURNEY W.O.","lat":-10.317,"lon":150.333,"elev":23.0,"first":2001,"last":2025},{"id":"PPM00092100","name":"TOKUA W.O.","lat":-4.333,"lon":152.367,"elev":13.0,"first":2002,"last":2017},{"id":"PPM00092003","name":"DARU W.O.","lat":-9.083,"lon":143.2,"elev":9.0,"first":1997,"last":2011},{"id":"PP000092044","name":"LOS NEGROS ADMRTY IS/MOMOTE S","lat":-2.05,"lon":147.433,"elev":8.0,"first":1968,"last":2003},{"id":"PPM00092072","name":"HOSKINS W.O.","lat":-5.467,"lon":150.4,"elev":8.0,"first":2002,"last":2012},{"id":"PPM00092087","name":"MISIMA W.O.","lat":-10.683,"lon":152.833,"elev":7.0,"first":1997,"last":2014},{"id":"PPM00092004","name":"WEWAK INTL","lat":-3.584,"lon":143.669,"elev":5.8,"first":1997,"last":2023},{"id":"PP000092014","name":"MADANG W.O.","lat":-5.217,"lon":145.8,"elev":4.0,"first":1951,"last":2020},{"id":"PPM00092044","name":"MOMOTE W.O.","lat":-2.05,"lon":147.417,"elev":4.0,"first":1997,"last":2018},{"id":"PPM00092076","name":"KAVIENG W.O.","lat":-2.567,"lon":150.817,"elev":4.0,"first":1997,"last":2024},{"id":"PPM00092022","name":"VANIMO","lat":-2.7,"lon":141.317,"elev":3.0,"first":2001,"last":2015}],"gaugeSummary":{"American Samoa":{"ever":21,"active":4,"maxElev":408.4,"above1000":0},"Solomon Islands":{"ever":3,"active":3,"maxElev":56.0,"above1000":0},"Northern Mariana Islands":{"ever":12,"active":5,"maxElev":197.5,"above1000":0},"Cook Islands":{"ever":1,"active":1,"maxElev":5.8,"above1000":0},"Fiji":{"ever":25,"active":24,"maxElev":827.0,"above1000":0},"Micronesia":{"ever":38,"active":20,"maxElev":106.1,"above1000":0},"French Polynesia":{"ever":8,"active":6,"maxElev":89.0,"above1000":0},"Guam":{"ever":34,"active":21,"maxElev":191.1,"above1000":0},"Kiribati":{"ever":6,"active":2,"maxElev":7.0,"above1000":0},"New Caledonia":{"ever":2,"active":0,"maxElev":18.0,"above1000":0},"Niue":{"ever":1,"active":0,"maxElev":59.0,"above1000":0},"Vanuatu":{"ever":6,"active":6,"maxElev":44.0,"above1000":0},"Papua New Guinea":{"ever":15,"active":5,"maxElev":72.8,"above1000":0},"Palau":{"ever":13,"active":5,"maxElev":75.9,"above1000":0},"Marshall Islands":{"ever":21,"active":8,"maxElev":5.2,"above1000":0},"Tokelau":{"ever":1,"active":0,"maxElev":3.0,"above1000":0},"Tonga":{"ever":1,"active":0,"maxElev":10.0,"above1000":0},"Tuvalu":{"ever":2,"active":2,"maxElev":3.0,"above1000":0},"Wallis and Futuna":{"ever":2,"active":1,"maxElev":36.0,"above1000":0}},"dispersion":{"American Samoa":{"active":4,"span":18},"Solomon Islands":{"active":3,"span":329},"Northern Mariana Islands":{"active":5,"span":128},"Cook Islands":{"active":1,"span":null},"Fiji":{"active":24,"span":1014},"Micronesia":{"active":20,"span":2787},"French Polynesia":{"active":6,"span":2057},"Guam":{"active":21,"span":43},"Kiribati":{"active":2,"span":1768},"New Caledonia":{"active":0,"span":null},"Niue":{"active":0,"span":null},"Vanuatu":{"active":6,"span":748},"Papua New Guinea":{"active":5,"span":1049},"Palau":{"active":5,"span":53},"Marshall Islands":{"active":8,"span":609},"Tokelau":{"active":0,"span":null},"Tonga":{"active":0,"span":null},"Tuvalu":{"active":2,"span":465},"Wallis and Futuna":{"active":1,"span":null}},"sondeYears":[[1950,14],[1951,17],[1952,19],[1953,19],[1954,20],[1955,19],[1956,19],[1957,20],[1958,23],[1959,22],[1960,23],[1961,23],[1962,26],[1963,24],[1964,24],[1965,24],[1966,25],[1967,26],[1968,28],[1969,28],[1970,30],[1971,31],[1972,30],[1973,46],[1974,48],[1975,45],[1976,46],[1977,46],[1978,50],[1979,51],[1980,46],[1981,44],[1982,43],[1983,43],[1984,43],[1985,43],[1986,43],[1987,43],[1988,42],[1989,40],[1990,39],[1991,39],[1992,41],[1993,39],[1994,39],[1995,37],[1996,35],[1997,33],[1998,31],[1999,31],[2000,29],[2001,29],[2002,28],[2003,28],[2004,28],[2005,26],[2006,26],[2007,26],[2008,26],[2009,25],[2010,24],[2011,22],[2012,21],[2013,21],[2014,19],[2015,19],[2016,18],[2017,18],[2018,18],[2019,18],[2020,18],[2021,18],[2022,18],[2023,18],[2024,17],[2025,17],[2026,16]],"sondeLast":{"American Samoa":2026,"Solomon Islands":2011,"Northern Mariana Islands":1992,"Cook Islands":2026,"Fiji":2026,"Micronesia":2026,"French Polynesia":2026,"Guam":2026,"Kiribati":2026,"New Caledonia":2026,"Vanuatu":2026,"Nauru":2013,"Papua New Guinea":2015,"Palau":2026,"Marshall Islands":2026,"Tonga":1999,"Tuvalu":2025,"Samoa":1989},"sondeNever":["Niue","Tokelau","Wallis and Futuna","Pitcairn"],"wdqmsLand":{"Guam":{"reg":3,"rep":2,"silent":0,"rec":1640.0,"exp":2040.0,"stations":[{"name":"GUAMO","status":"green","rec":610.0,"exp":744.0},{"name":"EL GUAMO AUT","status":"green","rec":544.0,"exp":552.0},{"name":"WEATHER FORECAST OFFICE, GUAM, MARIANA IS.","status":"orange","rec":486.0,"exp":744.0}],"pct":80},"Cook Islands":{"reg":8,"rep":5,"silent":0,"rec":6628.0,"exp":7771.0,"stations":[{"name":"ATIU AWS","status":"red","rec":242.0,"exp":4464.0},{"name":"PENRHYN AWS","status":"purple","rec":234.0,"exp":217.0},{"name":"AITUTAKI AWS","status":"purple","rec":237.0,"exp":217.0},{"name":"MAUKE AWS","status":"orange","rec":242.0,"exp":744.0},{"name":"RAROTONGA (91843-0)","status":"orange","rec":241.0,"exp":312.0},{"name":"RAROTONGA (91844-0)","status":"purple","rec":4463.0,"exp":1488.0},{"name":"RARATONGA AERO","status":"purple","rec":742.0,"exp":112.0},{"name":"MANGAIA AWS","status":"purple","rec":227.0,"exp":217.0}],"pct":85},"Northern Mariana Islands":{"reg":1,"rep":1,"silent":0,"rec":248.0,"exp":248.0,"stations":[{"name":"VOROTAN MOUNTAIN PASS","status":"green","rec":248.0,"exp":248.0}],"pct":100},"Micronesia":{"reg":15,"rep":0,"silent":6,"rec":789.0,"exp":5239.0,"stations":[{"name":"FALALOP ISLAND (CG), ULITHI ATOLL","status":"red","rec":65.0,"exp":248.0},{"name":"WOLEAI ATOLL, CAROLINE IS.","status":"red","rec":70.0,"exp":248.0},{"name":"ONOUN","status":"black","rec":0.0,"exp":248.0},{"name":"PULUWAT ATOLL AWS,  CAROLINE IS.","status":"black","rec":0.0,"exp":248.0},{"name":"PULUSUK,  CAROLINE IS.","status":"black","rec":0.0,"exp":744.0},{"name":"FANANU","status":"black","rec":0.0,"exp":248.0},{"name":"WEATHER SERVICE OFFICE, CHUUK, ECI","status":"red","rec":124.0,"exp":620.0},{"name":"LUKUNOCH ATOLL, CAROLINE ISLANDS","status":"red","rec":60.0,"exp":248.0},{"name":"OROLUK ATOLL AWS, CAROLINE ISLANDS","status":"black","rec":0.0,"exp":248.0},{"name":"WEATHER SERVICE OFFICE, POHNPEI, CAROLINE IS.","status":"red","rec":123.0,"exp":558.0},{"name":"PINGELAP ATOLL, CAROLINE IS.","status":"black","rec":0.0,"exp":248.0},{"name":"KOSRAE AIRPORT VICE LELU, KOSRAE ATOLL, CAROLINE IS.","status":"red","rec":69.0,"exp":248.0},{"name":"WEATHER SERVICE OFFICE, YAP, CAROLINE IS.","status":"red","rec":121.0,"exp":589.0},{"name":"NUKUORO ATOLL, CAROLINE IS.","status":"orange","rec":88.0,"exp":248.0},{"name":"KAPINGAMARANGI ATOLL, CAROLINE IS.","status":"red","rec":69.0,"exp":248.0}],"pct":15},"Marshall Islands":{"reg":7,"rep":0,"silent":6,"rec":229.0,"exp":2418.0,"stations":[{"name":"UTIRIK ATOLL,  MARSHALL IS.","status":"black","rec":0.0,"exp":248.0},{"name":"KWAJALEIN/BUCHOLZ AAF, MARSHALL IS.","status":"black","rec":0.0,"exp":589.0},{"name":"AILINGLAPALAP ATOLL, MARSHALL IS.","status":"black","rec":0.0,"exp":248.0},{"name":"JALUIT ATOLL, MARSHALL IS.","status":"black","rec":0.0,"exp":248.0},{"name":"WOTJE ATOLL, MARSHALL IS.","status":"black","rec":0.0,"exp":248.0},{"name":"MAJURO/MARSHALL IS. INTNL.","status":"orange","rec":229.0,"exp":589.0},{"name":"MILI ATOLL, MARSHALL IS.","status":"black","rec":0.0,"exp":248.0}],"pct":9},"Palau":{"reg":2,"rep":0,"silent":1,"rec":123.0,"exp":837.0,"stations":[{"name":"WEATHER SERVICE OFFICE, KOROR, PALAU WCI.","status":"red","rec":123.0,"exp":589.0},{"name":"TOBI ISLAND,  CAROLINE IS.","status":"black","rec":0.0,"exp":248.0}],"pct":15},"Kiribati":{"reg":7,"rep":3,"silent":1,"rec":943.0,"exp":1457.0,"stations":[{"name":"FANNING ISLAND (91487-0)","status":"black","rec":0.0,"exp":248.0},{"name":"CHRISTMAS ISLAND (91490-0)","status":"green","rec":246.0,"exp":248.0},{"name":"BUTARITARI","status":"orange","rec":94.0,"exp":248.0},{"name":"TARAWA","status":"green","rec":240.0,"exp":248.0},{"name":"TARAWA (AERODROME)","status":"purple","rec":240.0,"exp":93.0},{"name":"BERU","status":"red","rec":26.0,"exp":248.0},{"name":"KANTON ISLAND","status":"orange","rec":97.0,"exp":124.0}],"pct":65},"Solomon Islands":{"reg":6,"rep":5,"silent":0,"rec":1284.0,"exp":1085.0,"stations":[{"name":"TARO ISLAND","status":"purple","rec":171.0,"exp":155.0},{"name":"MUNDA","status":"purple","rec":243.0,"exp":155.0},{"name":"AUKI","status":"purple","rec":227.0,"exp":155.0},{"name":"HONIARA/HENDERSON","status":"green","rec":243.0,"exp":248.0},{"name":"SANTA CRUZ (91541-0)","status":"purple","rec":232.0,"exp":155.0},{"name":"TINGOA","status":"orange","rec":168.0,"exp":217.0}],"pct":118},"Nauru":{"reg":2,"rep":0,"silent":2,"rec":0.0,"exp":992.0,"stations":[{"name":"NAURU","status":"black","rec":0.0,"exp":248.0},{"name":"NAURU AIRPORT AWOS","status":"black","rec":0.0,"exp":744.0}],"pct":0},"Vanuatu":{"reg":8,"rep":3,"silent":2,"rec":2054.0,"exp":2912.0,"stations":[{"name":"SOLA (VANUA LAVA)","status":"orange","rec":164.0,"exp":248.0},{"name":"SARATAMATA","status":"red","rec":1.0,"exp":248.0},{"name":"PEKOA AIRPORT (SANTO)","status":"green","rec":708.0,"exp":744.0},{"name":"BAUERFIELD (EFATE)","status":"green","rec":739.0,"exp":744.0},{"name":"WHITE GRASS AIRPORT","status":"orange","rec":220.0,"exp":440.0},{"name":"ANEITYUM","status":"green","rec":222.0,"exp":248.0},{"name":"Pekoa AWS","status":"black","rec":0.0,"exp":120.0},{"name":"Bauerfield AWS","status":"black","rec":0.0,"exp":120.0}],"pct":71},"New Caledonia":{"reg":13,"rep":11,"silent":1,"rec":8428.0,"exp":9672.0,"stations":[{"name":"ILE SURPRISE","status":"green","rec":727.0,"exp":744.0},{"name":"ILE ART (BELEP)","status":"green","rec":744.0,"exp":744.0},{"name":"ILE LOOP (CHESTERFIELD)","status":"green","rec":736.0,"exp":744.0},{"name":"KOUMAC (NLLE-CALEDONIE)","status":"green","rec":744.0,"exp":744.0},{"name":"KONE","status":"green","rec":744.0,"exp":744.0},{"name":"OULOUP (ILE OUVEA)","status":"orange","rec":269.0,"exp":744.0},{"name":"OUANAHAM (ILE LIFOU)","status":"green","rec":744.0,"exp":744.0},{"name":"POINDIMIE (NLLE-CALEDONIE)","status":"black","rec":0.0,"exp":744.0},{"name":"TOUHO","status":"green","rec":744.0,"exp":744.0},{"name":"LA ROCHE (ILE MARE)","status":"green","rec":744.0,"exp":744.0},{"name":"LA TONTOUTA (NLLE-CALEDONIE)","status":"green","rec":744.0,"exp":744.0},{"name":"NOUMEA (NLLE-CALEDONIE)","status":"green","rec":744.0,"exp":744.0},{"name":"MOUE (ILE DES PINS)","status":"green","rec":744.0,"exp":744.0}],"pct":87},"Tuvalu":{"reg":4,"rep":1,"silent":0,"rec":513.0,"exp":961.0,"stations":[{"name":"NANUMEA","status":"orange","rec":109.0,"exp":248.0},{"name":"NUI","status":"orange","rec":85.0,"exp":248.0},{"name":"FUNAFUTI (91643-0)","status":"purple","rec":241.0,"exp":217.0},{"name":"NIULAKITA","status":"orange","rec":78.0,"exp":248.0}],"pct":53},"Fiji":{"reg":15,"rep":5,"silent":1,"rec":9186.0,"exp":7484.0,"stations":[{"name":"ROTUMA","status":"orange","rec":135.0,"exp":248.0},{"name":"UDU POINT","status":"orange","rec":574.0,"exp":744.0},{"name":"NABOUWALU","status":"orange","rec":94.0,"exp":248.0},{"name":"YASAWA-I-RARA AWS","status":"orange","rec":575.0,"exp":744.0},{"name":"VIWA AWS","status":"red","rec":111.0,"exp":744.0},{"name":"VANUA BALAVU","status":"purple","rec":573.0,"exp":248.0},{"name":"NADI AIRPORT","status":"green","rec":246.0,"exp":248.0},{"name":"SIGATOKA AWS","status":"orange","rec":573.0,"exp":744.0},{"name":"NAUSORI","status":"green","rec":243.0,"exp":248.0},{"name":"NADI HQ AWS","status":"purple","rec":4360.0,"exp":744.0},{"name":"LAKEBA AWS","status":"green","rec":582.0,"exp":682.0},{"name":"VUNISEA","status":"orange","rec":112.0,"exp":248.0},{"name":"MATUKU","status":"orange","rec":433.0,"exp":682.0},{"name":"ONO-I-LAU AWS","status":"orange","rec":575.0,"exp":744.0},{"name":"Ono i lau","status":"black","rec":0.0,"exp":168.0}],"pct":123},"Tokelau":{"reg":1,"rep":1,"silent":0,"rec":735.0,"exp":744.0,"stations":[{"name":"NUKUNONU AWS","status":"green","rec":735.0,"exp":744.0}],"pct":99},"Samoa":{"reg":11,"rep":2,"silent":9,"rec":493.0,"exp":6696.0,"stations":[{"name":"LE PIU TAI","status":"black","rec":0.0,"exp":744.0},{"name":"MAOTA INT AIRPORT","status":"black","rec":0.0,"exp":744.0},{"name":"MT TALU","status":"black","rec":0.0,"exp":744.0},{"name":"FALEOLO INT EAST","status":"black","rec":0.0,"exp":744.0},{"name":"FALEOLO INT WEST","status":"black","rec":0.0,"exp":744.0},{"name":"LUFI-LUFI","status":"black","rec":0.0,"exp":744.0},{"name":"TOGITOGIGA","status":"black","rec":0.0,"exp":744.0},{"name":"LE MAFA","status":"black","rec":0.0,"exp":744.0},{"name":"APIA WHARF","status":"black","rec":0.0,"exp":248.0},{"name":"FALEOLO AIRPORT","status":"green","rec":246.0,"exp":248.0},{"name":"APIA","status":"green","rec":247.0,"exp":248.0}],"pct":7},"Wallis and Futuna":{"reg":2,"rep":2,"silent":0,"rec":1477.0,"exp":1488.0,"stations":[{"name":"HIHIFO (ILE WALLIS)","status":"green","rec":741.0,"exp":744.0},{"name":"MAOPOOPO (ILE FUTUNA)","status":"green","rec":736.0,"exp":744.0}],"pct":99},"American Samoa":{"reg":1,"rep":0,"silent":0,"rec":121.0,"exp":248.0,"stations":[{"name":"PAGO PAGO/INT.AIRP. AMERICAN SAMOA","status":"orange","rec":121.0,"exp":248.0}],"pct":49},"Tonga":{"reg":5,"rep":3,"silent":1,"rec":738.0,"exp":992.0,"stations":[{"name":"NIUAFOOU","status":"black","rec":0.0,"exp":124.0},{"name":"KEPPEL/MATA'AHO AIRPORT","status":"orange","rec":113.0,"exp":248.0},{"name":"LUPEPAU'U","status":"green","rec":208.0,"exp":217.0},{"name":"HAAPAI","status":"purple","rec":178.0,"exp":155.0},{"name":"FUA'AMOTU","status":"green","rec":239.0,"exp":248.0}],"pct":74},"Niue":{"reg":1,"rep":0,"silent":0,"rec":101.0,"exp":248.0,"stations":[{"name":"HANAN AIRPORT","status":"orange","rec":101.0,"exp":248.0}],"pct":41},"French Polynesia":{"reg":10,"rep":10,"silent":0,"rec":7383.0,"exp":7440.0,"stations":[{"name":"HIVA-OA","status":"green","rec":744.0,"exp":744.0},{"name":"BORA-BORA-MOTU-AERO","status":"green","rec":743.0,"exp":744.0},{"name":"ANAA","status":"green","rec":733.0,"exp":744.0},{"name":"TAIARAPU-EST","status":"green","rec":733.0,"exp":744.0},{"name":"TAHITI-FAAA","status":"green","rec":733.0,"exp":744.0},{"name":"TAKAROA","status":"green","rec":733.0,"exp":744.0},{"name":"HAO","status":"green","rec":741.0,"exp":744.0},{"name":"MANGAREVA","status":"green","rec":744.0,"exp":744.0},{"name":"TUBUAI AERO","status":"green","rec":737.0,"exp":744.0},{"name":"RAPA","status":"green","rec":742.0,"exp":744.0}],"pct":99},"Papua New Guinea":{"reg":14,"rep":1,"silent":10,"rec":317.0,"exp":5611.0,"stations":[{"name":"KIUNGA W.O.","status":"black","rec":0.0,"exp":341.0},{"name":"DARU W.O.","status":"black","rec":0.0,"exp":434.0},{"name":"WEWAK W.O.","status":"black","rec":0.0,"exp":620.0},{"name":"GOROKA ATS","status":"black","rec":0.0,"exp":403.0},{"name":"MADANG W.O.","status":"black","rec":0.0,"exp":465.0},{"name":"VANIMO","status":"black","rec":0.0,"exp":248.0},{"name":"PORT MORESBY W.O.","status":"green","rec":209.0,"exp":248.0},{"name":"MOMOTE W.O.","status":"black","rec":0.0,"exp":620.0},{"name":"NADZAB W.O.","status":"orange","rec":38.0,"exp":93.0},{"name":"KAVIENG W.O.","status":"red","rec":39.0,"exp":620.0},{"name":"GURNEY W.O.","status":"black","rec":0.0,"exp":434.0},{"name":"MISIMA W.O.","status":"black","rec":0.0,"exp":434.0},{"name":"TOKUA W.O.","status":"red","rec":31.0,"exp":403.0},{"name":"Mendi North","status":"black","rec":0.0,"exp":248.0}],"pct":6}},"wdqmsUpper":{"Cook Islands":{"reg":2,"rep":0,"silent":1,"rec":31.0,"exp":124.0,"stations":[{"name":"PENRHYN","status":"black","rec":0.0,"exp":62.0},{"name":"RAROTONGA (91843-0)","status":"orange","rec":31.0,"exp":62.0}],"pct":25},"Fiji":{"reg":1,"rep":0,"silent":0,"rec":49.0,"exp":62.0,"stations":[{"name":"NADI AIRPORT","status":"orange","rec":49.0,"exp":62.0}],"pct":79},"French Polynesia":{"reg":4,"rep":4,"silent":0,"rec":142.0,"exp":124.0,"stations":[{"name":"HIVA-OA","status":"green","rec":25.0,"exp":31.0},{"name":"MANGAREVA","status":"green","rec":31.0,"exp":31.0},{"name":"RAPA","status":"purple","rec":31.0,"exp":0.0},{"name":"TAHITI-FAAA","status":"green","rec":55.0,"exp":62.0}],"pct":115},"Kiribati":{"reg":2,"rep":0,"silent":1,"rec":47.0,"exp":124.0,"stations":[{"name":"TARAWA","status":"orange","rec":47.0,"exp":62.0},{"name":"KANTON ISLAND","status":"black","rec":0.0,"exp":62.0}],"pct":38},"Marshall Islands":{"reg":2,"rep":1,"silent":0,"rec":90.0,"exp":124.0,"stations":[{"name":"KWAJALEIN/BUCHOLZ AAF, MARSHALL IS.","status":"orange","rec":28.0,"exp":62.0},{"name":"MAJURO/MARSHALL IS. INTNL.","status":"green","rec":62.0,"exp":62.0}],"pct":73},"Micronesia":{"reg":3,"rep":3,"silent":0,"rec":187.0,"exp":186.0,"stations":[{"name":"WEATHER SERVICE OFFICE, CHUUK, ECI","status":"purple","rec":63.0,"exp":62.0},{"name":"WEATHER SERVICE OFFICE, POHNPEI, CAROLINE IS.","status":"purple","rec":65.0,"exp":62.0},{"name":"WEATHER SERVICE OFFICE, YAP, CAROLINE IS.","status":"green","rec":59.0,"exp":62.0}],"pct":101},"New Caledonia":{"reg":1,"rep":1,"silent":0,"rec":60.0,"exp":62.0,"stations":[{"name":"NOUMEA (NLLE-CALEDONIE)","status":"green","rec":60.0,"exp":62.0}],"pct":97},"Palau":{"reg":1,"rep":1,"silent":0,"rec":56.0,"exp":62.0,"stations":[{"name":"WEATHER SERVICE OFFICE, KOROR, PALAU WCI.","status":"green","rec":56.0,"exp":62.0}],"pct":90},"Papua New Guinea":{"reg":2,"rep":0,"silent":2,"rec":0.0,"exp":124.0,"stations":[{"name":"MOMOTE W.O.","status":"black","rec":0.0,"exp":62.0},{"name":"PORT MORESBY W.O.","status":"black","rec":0.0,"exp":62.0}],"pct":0},"Tuvalu":{"reg":1,"rep":0,"silent":1,"rec":0.0,"exp":62.0,"stations":[{"name":"FUNAFUTI (91643-0)","status":"black","rec":0.0,"exp":62.0}],"pct":0},"American Samoa":{"reg":1,"rep":1,"silent":0,"rec":58.0,"exp":62.0,"stations":[{"name":"PAGO PAGO/INT.AIRP. AMERICAN SAMOA","status":"green","rec":58.0,"exp":62.0}],"pct":94},"Guam":{"reg":1,"rep":1,"silent":0,"rec":66.0,"exp":62.0,"stations":[{"name":"WEATHER FORECAST OFFICE, GUAM, MARIANA IS.","status":"purple","rec":66.0,"exp":62.0}],"pct":106},"Vanuatu":{"reg":1,"rep":0,"silent":0,"rec":9.0,"exp":62.0,"stations":[{"name":"BAUERFIELD (EFATE)","status":"red","rec":9.0,"exp":62.0}],"pct":15},"Solomon Islands":{"reg":1,"rep":0,"silent":1,"rec":0.0,"exp":62.0,"stations":[{"name":"HONIARA","status":"black","rec":0.0,"exp":62.0}],"pct":0}},"marine":{"pacific":260,"global":4178,"pctWithin1Pac":85,"pctWithin1Glb":78,"medPac":0.3,"points":[[20.94,-162.92,0.16],[21.68,-170.99,0.17],[20.18,-132.44,0.09],[17.23,-130.66,0.26],[24.76,-150.84,0.31],[17.07,-157.75,0.3],[24.36,-162.08,0.69],[0.0,163.3,0.75],[-2.0,163.5,0.52],[0.0,-179.9,0.19],[-27.09,174.9,0.76],[0.1,-169.7,0.34],[-2.0,-152.1,0.11],[19.05,151.88,0.23],[18.99,155.48,0.24],[18.97,156.14,0.16],[21.68,159.31,0.16],[23.46,162.58,0.14],[20.66,162.71,0.14],[23.6,166.87,0.23],[21.33,-165.64,0.12],[19.81,-170.59,0.21],[19.81,-170.61,0.32],[20.6,-168.2,0.12],[5.0,-140.0,0.32],[9.49,174.93,0.2],[11.03,-171.78,0.23],[24.45,-162.01,1.43],[-29.9,159.8,0.54],[-28.69,-160.0,0.2],[-16.58,-132.3,0.33],[-26.48,177.55,0.3],[-5.0,-139.9,0.12],[-2.0,-179.8,0.23],[2.0,-153.7,0.41],[-0.1,-139.9,0.18],[-2.0,-152.1,0.22],[0.0,-179.9,0.28],[0.0,163.3,0.24],[-1.7,-167.9,0.24],[2.0,-179.8,0.28],[5.0,-170.0,0.27],[-2.0,-140.0,0.16],[2.0,-170.0,0.25],[0.1,-169.7,0.26],[8.0,165.1,0.41],[0.0,-154.9,0.31],[9.0,-140.3,0.22],[2.0,-140.0,0.22],[2.0,164.4,0.32],[-2.0,163.5,0.21],[5.1,-140.0,0.25],[23.53,-153.79,0.43],[17.54,-152.23,0.21],[8.1,165.1,0.26],[2.0,164.4,0.47],[10.2,165.0,0.28],[10.0,-170.3,0.29],[-1.6,-167.9,0.31],[2.0,-170.0,0.2],[2.0,-153.7,0.25],[16.44,149.07,5.06],[19.21,150.57,0.14],[19.24,149.22,0.31],[18.94,157.13,0.22],[15.83,147.39,0.22],[15.1,148.99,0.38],[21.02,154.38,0.29],[19.01,-173.1,0.24],[19.82,-170.65,0.37],[22.01,-163.11,0.16],[20.63,-168.19,0.19],[18.99,-173.04,0.1],[18.99,-173.04,0.14],[21.33,-165.63,0.16],[22.01,-163.02,0.43],[22.02,-163.03,0.5],[20.6,-168.15,1.28],[21.32,-165.59,0.16],[-1.0,-140.0,0.16],[1.0,-139.9,0.18],[9.0,-140.3,0.25],[10.25,-141.36,0.2],[10.23,-135.02,0.2],[9.24,179.35,0.17],[10.07,-152.14,0.33],[10.39,-160.32,0.24],[13.5,138.0,0.31],[13.53,135.8,0.52],[13.36,133.96,0.71],[15.48,131.99,0.65],[17.5,130.0,0.4],[9.0,-140.2,0.22],[0.1,-169.7,0.19],[-5.0,-139.9,0.21],[2.0,-153.7,0.32],[-2.0,-152.1,0.14],[0.2,-153.3,0.23],[5.0,-170.0,0.27],[2.2,-169.8,0.19],[-1.6,-167.9,0.26],[-0.1,-139.9,0.16],[2.0,165.0,0.29],[8.1,165.1,0.2],[14.56,147.74,0.19],[0.0,-179.9,0.22],[-1.9,-179.8,0.26],[17.54,-152.23,0.18],[23.53,-153.79,0.35],[24.45,-162.01,1.02],[24.36,-162.08,1.16],[17.04,-157.75,0.55],[0.0,163.3,0.29],[-2.0,163.5,0.23],[2.0,-179.8,0.21],[-2.0,-140.0,0.14],[2.0,-140.0,0.13],[5.0,-140.0,0.25],[-10.24,143.57,0.35],[-24.78,162.94,0.42],[-26.28,-176.31,0.41],[21.07,-138.59,0.13],[21.98,-132.21,0.32],[-15.22,-135.47,0.26],[17.45,-145.89,0.16],[21.45,135.88,0.21],[-28.23,-140.54,0.95],[10.2,165.0,0.2],[10.0,-170.3,0.26],[16.44,158.62,0.25],[16.62,158.44,0.28],[17.01,158.05,0.62],[16.81,158.23,0.46],[17.43,157.63,0.15],[17.22,157.83,0.5],[17.82,157.23,0.54],[18.01,157.05,0.3],[17.61,157.42,0.15],[16.27,158.85,0.15],[18.23,156.82,0.19],[18.45,156.6,0.37],[18.77,156.28,0.33],[18.63,156.44,0.2],[18.9,156.16,0.27],[22.01,-163.05,0.15],[20.61,-168.13,0.2],[19.0,-173.03,0.13],[21.32,-165.6,0.24],[21.32,-165.6,0.09],[19.81,-170.57,0.21],[19.81,-170.57,0.36],[22.0,-163.0,0.18],[22.01,-163.02,0.45],[20.61,-168.12,1.11],[19.81,-170.62,0.38],[19.03,-173.11,0.53],[21.27,-166.03,0.13],[20.57,-168.23,0.26],[-1.0,-140.0,0.17],[1.0,-139.9,0.16],[10.37,-166.42,0.3],[9.85,-157.59,0.24],[9.47,-176.52,0.2],[9.73,-140.43,0.16],[9.48,-148.77,0.25],[8.84,177.97,0.25],[9.51,-131.79,0.22],[13.5,138.0,0.35],[13.5,137.39,0.14],[13.37,133.97,0.23],[15.38,132.12,0.17],[17.5,130.0,0.11],[16.9,131.6,0.45],[4.3,138.6,0.7],[13.3,148.1,1.3],[-5.4,147.4,0.61],[0.6,152.4,0.54],[-8.9,146.1,4.64],[18.2,147.1,3.06],[-21.0,149.6,2.49],[-22.0,156.1,0.53],[-19.42,160.91,0.2],[17.1,-163.0,0.6],[0.7,144.5,0.57],[-25.9,-157.46,0.47],[-19.42,-137.03,0.22],[21.3,-157.8,5.16],[18.0,135.7,2.29],[11.8,139.8,0.75],[-1.4,141.7,0.97],[24.2,-149.6,0.68],[-22.25,166.38,0.46],[-5.5,-152.6,1.22],[-9.7,151.6,0.97],[21.9,-157.8,0.67],[17.4,161.2,0.64],[24.9,130.7,0.5],[16.9,148.1,0.47],[12.6,130.6,2.11],[-21.1,149.6,2.13],[19.9,-173.2,2.16],[15.0,162.9,1.39],[21.5,134.2,1.29],[23.1,154.2,0.24],[12.4,-134.1,4.26],[22.7,133.1,4.39],[20.4,136.8,0.55],[22.6,142.3,1.08],[23.5,-153.8,0.35],[24.5,-162.0,1.41],[17.5,-152.2,0.17],[5.8,151.1,0.61],[17.6,133.2,0.96],[-28.0,153.9,2.0],[18.3,147.6,0.55],[24.7,-146.9,0.9],[-2.5,152.9,6.2],[-27.3,153.2,0.17],[-14.1,-169.7,0.22],[9.8,139.1,2.77],[-12.6,152.3,1.96],[-23.83,151.67,0.76],[4.3,148.4,0.45],[-9.3,132.7,28.25],[4.0,168.8,2.24],[13.8,131.5,0.53],[6.6,142.5,0.56],[24.7,-149.2,1.21],[-10.79,-139.14,0.33],[-17.53,-149.58,0.17],[23.7,-148.6,0.96],[4.2,-169.9,0.66],[18.2,135.8,5.21],[7.5,139.1,0.54],[-22.2,151.1,0.7],[-19.68,-150.96,0.33],[-17.8,152.6,1.28],[9.0,131.8,0.3],[16.7,134.3,3.93],[-22.33,166.28,0.21],[-28.6,169.1,1.1],[-17.37,-147.18,0.69],[7.3,134.5,0.36],[18.8,137.2,0.27],[-0.8,-173.9,1.09],[-17.54,-149.58,0.16],[23.6,-144.4,3.18],[-10.59,142.25,0.52],[19.0,138.0,3.27],[-26.4,153.9,1.99],[-3.2,145.2,0.64],[2.4,138.6,0.93],[17.7,158.7,1.79],[-27.2,156.8,0.93],[17.0,-157.7,0.28],[24.4,-162.1,0.66],[-17.49,-149.63,0.59],[-22.2,167.2,0.63],[-17.53,-149.58,0.43],[-21.3,153.1,5.71]]},"llga":[{"zone":"Very high altitude","llga":"Kandep Rural","location":"Kandep Basin","province":"Enga","district":"Kandep","rating":"5","pop_2015_est":"33099","pop_2011_census":"42074"},{"zone":"Very high altitude","llga":"Wage Rural","location":"Panguaga, Wage, Bioko, Iumbis, Karekare","province":"Enga","district":"Kandep","rating":"5","pop_2015_est":"38001","pop_2011_census":"30775"},{"zone":"Very high altitude","llga":"Lagaip Rural","location":"Lagaip","province":"Enga","district":"Lagaip-Porgera","rating":"5","pop_2015_est":"61793","pop_2011_census":"47602"},{"zone":"Very high altitude","llga":"Porgera Rural","location":"Pilikambi","province":"Enga","district":"Lagaip-Porgera","rating":"5","pop_2015_est":"34214","pop_2011_census":"55419"},{"zone":"Very high altitude","llga":"Ialibu Basin Rural","location":"Ialibu","province":"Southern Highlands","district":"Ialibu-Pangia","rating":"5","pop_2015_est":"23165","pop_2011_census":"18427"},{"zone":"Very high altitude","llga":"Imbonggu Rural","location":"Imbonggu","province":"Southern Highlands","district":"Imbonggu","rating":"5","pop_2015_est":"38481","pop_2011_census":"20251"},{"zone":"Very high altitude","llga":"Magarima Rural","location":"Magarima, Yangari","province":"Hela","district":"Komo-Magarima","rating":"5","pop_2015_est":"49833","pop_2011_census":"38042"},{"zone":"Very high altitude","llga":"Mt Giluwe Rural","location":"Tambul Basin","province":"Western Highlands","district":"Tambul-Nebilyer","rating":"5","pop_2015_est":"47426","pop_2011_census":"36524"},{"zone":"Very high altitude","llga":"Nebilyer Rural","location":"Upper Nebilyer","province":"Western Highlands","district":"Tambul-Nebilyer","rating":"5","pop_2015_est":"43809","pop_2011_census":"33031"},{"zone":"Very high altitude","llga":"Upper Mendi Rural","location":"North of Mendi","province":"Southern Highlands","district":"Mendi","rating":"4","pop_2015_est":"40570","pop_2011_census":"34204"},{"zone":"Highland and highland fringe","llga":"Telefomin Rural","location":"Telefomin","province":"Sandaun","district":"Telefomin","rating":"5","pop_2015_est":"13463","pop_2011_census":"9996"},{"zone":"Highland and highland fringe","llga":"Yapsie Rural","location":"Yapsie","province":"Sandaun","district":"Telefomin","rating":"5","pop_2015_est":"9977","pop_2011_census":"6947"},{"zone":"Highland and highland fringe","llga":"Mitnande Rural","location":"Gembogl","province":"Simbu","district":"Kundiawa-Gembogl","rating":"5","pop_2015_est":"22683","pop_2011_census":"25742"},{"zone":"Highland and highland fringe","llga":"Gumine Rural","location":"Gumine","province":"Simbu","district":"Gumine","rating":"5","pop_2015_est":"22529","pop_2011_census":"25461"},{"zone":"Highland and highland fringe","llga":"Oksapmin Rural","location":"Oksapmin","province":"Sandaun","district":"Telefomin","rating":"4","pop_2015_est":"18432","pop_2011_census":"13260"},{"zone":"Highland and highland fringe","llga":"Hulia Rural","location":"Dauli, Tigibi","province":"Hela","district":"Tari-Pori","rating":"4","pop_2015_est":"22688","pop_2011_census":"42172"},{"zone":"Highland and highland fringe","llga":"Lake Kopiago Rural","location":"Strickland, Kopiago","province":"Hela","district":"Koroba-Kopiago","rating":"4","pop_2015_est":"21800","pop_2011_census":"35382"},{"zone":"Highland and highland fringe","llga":"Baiyer Rural","location":"Baiyer River","province":"Western Highlands","district":"Mul-Baiyer","rating":"4","pop_2015_est":"30479","pop_2011_census":"34266"},{"zone":"Highland and highland fringe","llga":"Elimbari Rural","location":"Elimbari area","province":"Simbu","district":"Chuave","rating":"4","pop_2015_est":"19242","pop_2011_census":"12896"},{"zone":"Highland and highland fringe","llga":"Salt Rural","location":"Salt, South","province":"Simbu","district":"Karimui-Nomane","rating":"4","pop_2015_est":"19145","pop_2011_census":"23635"},{"zone":"Highland and highland fringe","llga":"Nomane Rural","location":"Nomane, South","province":"Simbu","district":"Karimui-Nomane","rating":"4","pop_2015_est":"10061","pop_2011_census":"7872"},{"zone":"Highland and highland fringe","llga":"Yelia Rural","location":"Wonenara, Marawaka","province":"Eastern Highlands","district":"Obura-Wonenara","rating":"4","pop_2015_est":"23235","pop_2011_census":"22581"},{"zone":"Highland and highland fringe","llga":"Kaintiba Rural","location":"Inland Gulf","province":"Gulf","district":"Kerema","rating":"4","pop_2015_est":"13757","pop_2011_census":"12960"},{"zone":"Highland and highland fringe","llga":"Kotidanga Rural","location":"Inland Gulf","province":"Gulf","district":"Kerema","rating":"4","pop_2015_est":"24978","pop_2011_census":"19867"},{"zone":"Inland lowland Western Province","llga":"Nomad Rural","location":"Mougulu, Nomad","province":"Western","district":"Middle Fly","rating":"5","pop_2015_est":"15843","pop_2011_census":"4962"},{"zone":"Inland lowland Western Province","llga":"Morehead Rural","location":"Morehead","province":"Western","district":"South Fly","rating":"5","pop_2015_est":"17256","pop_2011_census":"14444"},{"zone":"Inland lowland Western Province","llga":"Gogodala Rural","location":"Balimo area","province":"Western","district":"Middle Fly","rating":"4","pop_2015_est":"36275","pop_2011_census":"32249"}]};
+const TIP = document.getElementById('tip');
+const C = {s1:'#3987e5',s2:'#d95926',s3:'#199e70',warn:'#e6b800',bad:'#e66767',
+           ink2:'#a9bccd',ink3:'#6d8399',grid:'rgba(169,188,205,.14)'};
+const NS='http://www.w3.org/2000/svg';
+const fmt=(n,d=0)=>n==null?'—':n.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
+
+function el(t,a={}){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+function svg(host,w,h){const s=el('svg',{viewBox:`0 0 ${w} ${h}`,role:'img'});
+  const n=document.getElementById(host); n.innerHTML=''; n.appendChild(s); return s;}
+function showTip(ev,html){TIP.innerHTML=html;TIP.style.opacity=1;
+  const r=TIP.getBoundingClientRect();let x=ev.clientX+14,y=ev.clientY-10;
+  if(x+r.width>innerWidth-8)x=ev.clientX-r.width-14;
+  if(y+r.height>innerHeight-8)y=innerHeight-r.height-8;
+  TIP.style.left=x+'px';TIP.style.top=Math.max(8,y)+'px';}
+function hideTip(){TIP.style.opacity=0;}
+function row(k,v){return `<div class="r"><span class="k">${k}</span><span>${v}</span></div>`;}
+
+/* axis helpers ------------------------------------------------------------ */
+function ticks(min,max,n=5){const span=max-min,raw=span/n,mag=Math.pow(10,Math.floor(Math.log10(raw)));
+  const st=[1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=raw)||10*mag;
+  const out=[];for(let v=Math.ceil(min/st)*st;v<=max+1e-9;v+=st)out.push(+v.toFixed(10));return out;}
+function yAxis(s,sc,x,min,max,label){
+  ticks(min,max).forEach(t=>{const y=sc(t);
+    s.appendChild(el('line',{x1:x,x2:s.viewBox.baseVal.width-8,y1:y,y2:y,class:'gl'}));
+    const tx=el('text',{x:x-8,y:y+4,'text-anchor':'end',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    tx.textContent=t; s.appendChild(tx);});
+  if(label){const g=el('text',{x:x-4,y:9,'text-anchor':'start',fill:C.ink3,'font-size':10.5});
+    g.textContent=label;s.appendChild(g);}}
+function xAxis(s,sc,y,vals){
+  vals.forEach(v=>{const x=sc(v);
+    const tx=el('text',{x:x,y:y+18,'text-anchor':'middle',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    tx.textContent=v; s.appendChild(tx);});}
+
+/* generic multi-line chart with crosshair -------------------------------- */
+/* Greedy direct-label placer for scatter charts. Tries four offsets per point
+   and drops the label if none is free, so a crowded corner degrades to hover +
+   table rather than to overlapping text. Returns the number dropped so the
+   caller can say so instead of silently hiding countries. */
+function placeLabels(s,pts,o){
+  const fs=o.size||10.5,pad=1.5,W=o.W,H=o.H,M=o.M;
+  const placed=(o.avoid||[]).slice(),out=[];
+  // longest names first - they are the ones with no chance if placed late
+  [...pts].sort((a,b)=>b.text.length-a.text.length).forEach(p=>{
+    const w=p.text.length*fs*0.56,h=fs+2,r=p.r||5;
+    const cands=[[0,-(r+5),'middle'],[0,r+5+h*0.7,'middle'],
+                 [r+6,h*0.32,'start'],[-(r+6),h*0.32,'end']];
+    for(const [dx,dy,anchor] of cands){
+      const cx=p.x+dx,cy=p.y+dy;
+      const x0=anchor==='middle'?cx-w/2:anchor==='start'?cx:cx-w;
+      const box={x0:x0-pad,y0:cy-h+pad,x1:x0+w+pad,y1:cy+pad};
+      if(box.x0<4||box.x1>W-4||box.y0<2||box.y1>H-M.b+2)continue;
+      if(placed.some(q=>!(box.x1<q.x0||box.x0>q.x1||box.y1<q.y0||box.y0>q.y1)))continue;
+      placed.push(box);out.push({p,cx,cy,anchor});return;
+    }
+  });
+  out.forEach(({p,cx,cy,anchor})=>{
+    const t=el('text',{x:cx,y:cy,'text-anchor':anchor,fill:p.fill||C.ink2,
+      'font-size':fs,class:'dlab'});
+    t.textContent=p.text;s.appendChild(t);});
+  const dropped=pts.length-out.length;
+  if(dropped){
+    const n=el('text',{x:W-6,y:H-M.b-4,'text-anchor':'end',fill:C.ink3,'font-size':10});
+    n.textContent=dropped+' label'+(dropped>1?'s':'')+' hidden to avoid overlap — hover or open the table';
+    s.appendChild(n);
+  }
+  return dropped;
+}
+
+function lineChart(host,series,opts={}){
+  const W=opts.w||900,H=opts.h||260,M={t:14,r:12,b:30,l:opts.l||46};
+  const s=svg(host,W,H);
+  const xs=series.flatMap(q=>q.pts.map(p=>p[0])), ys=series.flatMap(q=>q.pts.map(p=>p[1]));
+  const x0=opts.x0??Math.min(...xs), x1=opts.x1??Math.max(...xs);
+  let y0=opts.y0??Math.min(...ys), y1=opts.y1??Math.max(...ys);
+  const pad=(y1-y0)*.12||1; y0-=pad; y1+=pad;
+  const sx=v=>M.l+(v-x0)/(x1-x0)*(W-M.l-M.r), sy=v=>H-M.b-(v-y0)/(y1-y0)*(H-M.t-M.b);
+  (opts.bands||[]).forEach(b=>s.appendChild(el('rect',{x:sx(b[0]),y:M.t,width:sx(b[1])-sx(b[0]),
+    height:H-M.t-M.b,fill:b[2]||'rgba(169,188,205,.10)'})));
+  yAxis(s,sy,M.l,y0+pad,y1-pad,opts.ylab);
+  if(y0<0&&y1>0)s.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:sy(0),y2:sy(0),stroke:C.ink3,'stroke-width':1,opacity:.5}));
+  const step=Math.max(1,Math.round((x1-x0)/6));const tv=[];for(let v=Math.ceil(x0/step)*step;v<=x1;v+=step)tv.push(v);
+  xAxis(s,sx,H-M.b,tv);
+  series.forEach(q=>{
+    const d=q.pts.map((p,i)=>(i?'L':'M')+sx(p[0])+' '+sy(p[1])).join(' ');
+    if(q.area)s.appendChild(el('path',{d:d+`L${sx(q.pts[q.pts.length-1][0])} ${sy(Math.max(y0,0))}L${sx(q.pts[0][0])} ${sy(Math.max(y0,0))}Z`,
+      fill:q.color,opacity:.16}));
+    s.appendChild(el('path',{d,fill:'none',stroke:q.color,'stroke-width':q.w||2,
+      'stroke-linejoin':'round','stroke-linecap':'round',opacity:q.op??1}));});
+  (opts.marks||[]).forEach(m=>{
+    s.appendChild(el('line',{x1:sx(m.x),x2:sx(m.x),y1:M.t,y2:H-M.b,stroke:m.color||C.bad,
+      'stroke-width':1,'stroke-dasharray':'4 3',opacity:.7}));
+    const t=el('text',{x:sx(m.x)+5,y:M.t+12,fill:m.color||C.bad,'font-size':11,'font-family':'ui-monospace,monospace'});
+    t.textContent=m.label;s.appendChild(t);});
+  const cross=el('line',{class:'cross',y1:M.t,y2:H-M.b});s.appendChild(cross);
+  const dots=series.map(q=>{const c=el('circle',{r:4.5,fill:q.color,stroke:'#0d1b2a','stroke-width':2,opacity:0});s.appendChild(c);return c;});
+  const hit=el('rect',{class:'hit',x:M.l,y:M.t,width:W-M.l-M.r,height:H-M.t-M.b});s.appendChild(hit);
+  hit.addEventListener('pointermove',ev=>{
+    const bb=s.getBoundingClientRect();
+    const vx=x0+((ev.clientX-bb.left)/bb.width*W-M.l)/(W-M.l-M.r)*(x1-x0);
+    let out='',anyX=null;
+    series.forEach((q,i)=>{
+      let best=null;q.pts.forEach(p=>{if(!best||Math.abs(p[0]-vx)<Math.abs(best[0]-vx))best=p;});
+      if(!best){dots[i].setAttribute('opacity',0);return;}
+      anyX=best[0];
+      dots[i].setAttribute('cx',sx(best[0]));dots[i].setAttribute('cy',sy(best[1]));dots[i].setAttribute('opacity',1);
+      out+=row(`<span style="color:${q.color}">■</span> ${q.name}`,fmt(best[1],opts.dp??2)+(opts.unit||''));});
+    if(anyX!=null){cross.setAttribute('x1',sx(anyX));cross.setAttribute('x2',sx(anyX));cross.setAttribute('opacity',.8);
+      showTip(ev,`<b>${anyX}</b>${out}`);}});
+  hit.addEventListener('pointerleave',()=>{hideTip();cross.setAttribute('opacity',0);dots.forEach(d=>d.setAttribute('opacity',0));});
+  return {s,sx,sy,M,W,H};
+}
+
+/* ============ HERO ============ */
+const sstCountries=Object.keys(D.sst).sort();
+const bySel=document.getElementById('byear'),bpSel=document.getElementById('bplace');
+for(let y=1950;y<=2010;y++){const o=document.createElement('option');o.value=y;o.textContent=y;if(y===1990)o.selected=true;bySel.appendChild(o);}
+sstCountries.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;if(c==='Nauru')o.selected=true;bpSel.appendChild(o);});
+function drawHero(){
+  const c=bpSel.value,by=+bySel.value,d=D.sst[c]||{};
+  const pts=Object.entries(d).map(([y,v])=>[+y,v]).sort((a,b)=>a[0]-b[0]);
+  const dec=pts.filter(p=>p[0]>=by&&p[0]<by+10).map(p=>p[1]);
+  const now=pts.filter(p=>p[0]>=2016).map(p=>p[1]);
+  const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+  const diff=(dec.length&&now.length)?mean(now)-mean(dec):null;
+  document.getElementById('warmN').textContent=diff==null?'—':(diff>0?'+':'')+diff.toFixed(1)+'°C';
+  document.getElementById('warmL').textContent=`warmer than your first decade, ${by}–${by+9}, in ${c}`;
+  document.getElementById('obsN').textContent=pts.length;
+  document.getElementById('heroCap').innerHTML=diff==null?'No overlapping record for that combination — try another year.':
+    `Seas around <b>${c}</b> averaged <b>${(diff>0?'+':'')+diff.toFixed(2)}°C</b> warmer in 2016–2025 than they
+     did across your first decade. The record for this place runs from <b>${pts[0][0]}</b>.`;
+  lineChart('c-hero',[{name:c,pts,color:C.s2,area:true}],
+    {h:225,bands:[[by,by+10,'rgba(57,135,229,.14)']],ylab:'anomaly, degrees C',dp:2,unit:'°C'});
+}
+bySel.onchange=bpSel.onchange=drawHero; drawHero();
+
+/* ============ SST + fit ============ */
+lineChart('c-sst',[
+  {name:'Observed',pts:D.sstRegional,color:C.ink3,w:1.4,op:.75},
+  {name:'Fitted',pts:D.sstFit,color:C.s1,w:3}],
+  {h:280,ylab:'anomaly, degrees C',dp:2,unit:'°C',
+   marks:[{x:1915,label:'1915',color:C.ink3},{x:1985,label:'1985',color:C.s2}]});
+['era1','era2','era3'].forEach((id,i)=>{const v=D.eras[i];
+  document.getElementById(id).textContent=(v>0?'+':'')+v.toFixed(3);});
+
+/* ============ RATIO ============ */
+document.getElementById('ratioN').textContent=D.ratio.ratio.toFixed(1)+'×';
+document.getElementById('jumpN').textContent=D.ratio.jump.toFixed(1);
+document.getElementById('trendN').textContent=D.ratio.trend.toFixed(1);
+
+/* ============ RAIN ============ */
+const rainSel=document.getElementById('rainSel');
+{const o=document.createElement('option');o.value='__all';o.textContent='Regional average';rainSel.appendChild(o);}
+Object.keys(D.rain).sort().forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;rainSel.appendChild(o);});
+function drawRain(){
+  const v=rainSel.value;let pts,name;
+  if(v==='__all'){const yrs={};Object.values(D.rain).forEach(d=>{for(const y in d){(yrs[y]=yrs[y]||[]).push(d[y]);}});
+    pts=Object.entries(yrs).map(([y,a])=>[+y,a.reduce((s,x)=>s+x,0)/a.length]).sort((a,b)=>a[0]-b[0]);
+    name='Regional average';}
+  else{pts=Object.entries(D.rain[v]).map(([y,x])=>[+y,x]).sort((a,b)=>a[0]-b[0]);name=v;}
+  lineChart('c-rain',[{name,pts,color:C.s2,area:true}],
+    {h:245,ylab:'anomaly, mm',dp:1,unit:' mm'});
+  const t=document.getElementById('t-rain');
+  t.innerHTML='<table><thead><tr><th>Year</th><th>'+name+' (mm)</th></tr></thead><tbody>'+
+    pts.slice().reverse().map(p=>`<tr><td>${p[0]}</td><td>${p[1].toFixed(1)}</td></tr>`).join('')+'</tbody></table>';
+}
+rainSel.onchange=drawRain; drawRain();
+
+/* ============ SPLIT ============ */
+lineChart('c-split',[
+  {name:'Wetter side',pts:D.wetSide,color:C.s1},
+  {name:'Drier side',pts:D.drySide,color:C.s2}],
+  {h:265,ylab:'anomaly, mm',dp:1,unit:' mm',bands:[[2015,2016,'rgba(169,188,205,.14)']],
+   marks:[{x:2015.5,label:'2015–16',color:C.ink2}]});
+
+/* ============ ONI ============ */
+{
+  const pts=Object.entries(D.oni).map(([y,v])=>[+y,v]).sort((a,b)=>a[0]-b[0]);
+  const W=900,H=200,M={t:14,r:12,b:30,l:46};const s=svg('c-oni',W,H);
+  const x0=pts[0][0],x1=pts[pts.length-1][0];
+  const ys=pts.map(p=>p[1]);let y0=Math.min(...ys)-.3,y1=Math.max(...ys)+.3;
+  const sx=v=>M.l+(v-x0)/(x1-x0)*(W-M.l-M.r),sy=v=>H-M.b-(v-y0)/(y1-y0)*(H-M.t-M.b);
+  yAxis(s,sy,M.l,y0+.3,y1-.3,'ONI');
+  [0.5,-0.5].forEach(v=>s.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:sy(v),y2:sy(v),
+    stroke:C.ink3,'stroke-width':1,'stroke-dasharray':'3 3',opacity:.5})));
+  s.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:sy(0),y2:sy(0),stroke:C.ink3,opacity:.6}));
+  const bw=(W-M.l-M.r)/pts.length*.78;
+  pts.forEach(p=>{
+    const h=Math.abs(sy(p[1])-sy(0)),y=p[1]>0?sy(p[1]):sy(0);
+    const col=p[1]>=0.5?C.s2:(p[1]<=-0.5?C.s1:C.ink3);
+    const r=el('rect',{x:sx(p[0])-bw/2,y,width:bw,height:Math.max(1,h),fill:col,rx:2,opacity:.92});
+    r.addEventListener('pointerenter',ev=>showTip(ev,`<b>${p[0]}</b>`+row('ONI',p[1].toFixed(2))+
+      row('Phase',p[1]>=0.5?'El Niño':(p[1]<=-0.5?'La Niña':'Neutral'))));
+    r.addEventListener('pointerleave',hideTip);s.appendChild(r);});
+  const step=10;const tv=[];for(let v=Math.ceil(x0/step)*step;v<=x1;v+=step)tv.push(v);
+  xAxis(s,sx,H-M.b,tv);
+}
+
+/* ============ WAFFLE ============ */
+{
+  const w=document.getElementById('waffle');
+  for(let i=0;i<271;i++){const d=document.createElement('div');
+    d.className='cell '+(i<141?'f':'e');
+    d.title=i<141?'District with a food supply report':'District estimated from elsewhere';
+    w.appendChild(d);}
+}
+
+/* ============ LLGA dot plot ============ */
+{
+  const rows=D.llga.map(r=>({llga:r.llga.replace(' Rural',''),prov:r.province,zone:r.zone,
+    rating:+r.rating,pop:+r.pop_2015_est})).sort((a,b)=>a.pop-b.pop);
+  const zc={'Very high altitude':C.s1,'Highland and highland fringe':'#5b8ab0',
+    'Inland lowland Western Province':C.s2};
+  const W=900,rowH=14,H=rows.length*rowH+46,M={t:10,r:60,b:30,l:180};
+  const s=svg('c-llga',W,H);
+  const max=Math.max(...rows.map(r=>r.pop));
+  const sx=v=>M.l+v/max*(W-M.l-M.r);
+  ticks(0,max/1000,5).forEach(t=>{const x=sx(t*1000);
+    s.appendChild(el('line',{x1:x,x2:x,y1:M.t,y2:H-M.b,class:'gl'}));
+    const tx=el('text',{x,y:H-M.b+18,'text-anchor':'middle',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    tx.textContent=t+'k';s.appendChild(tx);});
+  rows.forEach((r,i)=>{
+    const y=M.t+i*rowH+rowH/2;
+    s.appendChild(el('line',{x1:M.l,x2:sx(r.pop),y1:y,y2:y,stroke:C.grid,'stroke-width':1}));
+    const lb=el('text',{x:M.l-10,y:y+4,'text-anchor':'end',fill:C.ink2,'font-size':11.5});
+    lb.textContent=r.llga;s.appendChild(lb);
+    const c=el('circle',{cx:sx(r.pop),cy:y,r:r.rating===5?6:3.6,fill:zc[r.zone]||C.ink3,
+      stroke:'#0d1b2a','stroke-width':2});
+    c.addEventListener('pointerenter',ev=>showTip(ev,`<b>${r.llga}</b>`+row('Province',r.prov)+
+      row('Zone',r.zone)+row('Rating',r.rating===5?'5 — no food at all':'4 — famine food only')+
+      row('Population',fmt(r.pop))));
+    c.addEventListener('pointerleave',hideTip);s.appendChild(c);});
+  const t=document.getElementById('t-llga');
+  t.innerHTML='<table><thead><tr><th>District</th><th>Province</th><th>Rating</th><th>Population</th></tr></thead><tbody>'+
+    rows.slice().reverse().map(r=>`<tr><td>${r.llga}</td><td style="text-align:left">${r.prov}</td><td>${r.rating}</td><td>${fmt(r.pop)}</td></tr>`).join('')+'</tbody></table>';
+}
+
+/* ============ MARINE ============ */
+document.getElementById('marPac').textContent=D.marine.pacific;
+document.getElementById('marPct').textContent=D.marine.pctWithin1Pac+'%';
+document.getElementById('marGlb').textContent=D.marine.pctWithin1Glb+'%';
+{
+  const W=900,H=265,M={t:14,r:14,b:32,l:46};const s=svg('c-marine',W,H);
+  const pts=D.marine.points.map(p=>({lat:p[0],lon:p[1]<0?p[1]+360:p[1],rms:p[2]}));
+  const x0=120,x1=250,y0=-32,y1=27;
+  const sx=v=>M.l+(v-x0)/(x1-x0)*(W-M.l-M.r),sy=v=>H-M.b-(v-y0)/(y1-y0)*(H-M.t-M.b);
+  [-30,-20,-10,0,10,20].forEach(v=>{const y=sy(v);
+    s.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:y,y2:y,class:'gl'}));
+    const t=el('text',{x:M.l-8,y:y+4,'text-anchor':'end',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    t.textContent=(v>0?v+'°N':(v<0?-v+'°S':'0°'));s.appendChild(t);});
+  [140,180,220].forEach(v=>{const x=sx(v);
+    const t=el('text',{x,y:H-M.b+18,'text-anchor':'middle',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    t.textContent=(v<=180?v+'°E':(360-v)+'°W');s.appendChild(t);});
+  s.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:sy(0),y2:sy(0),stroke:C.ink3,opacity:.5,'stroke-dasharray':'4 3'}));
+  const eq=el('text',{x:W-M.r-4,y:sy(0)-6,'text-anchor':'end',fill:C.ink3,'font-size':10.5,'font-family':'ui-monospace,monospace'});
+  eq.textContent='equator';s.appendChild(eq);
+  pts.forEach(p=>{
+    if(p.lon<x0||p.lon>x1)return;
+    const col=p.rms<=1?C.s3:(p.rms<=2?C.warn:C.bad);
+    const c=el('circle',{cx:sx(p.lon),cy:sy(p.lat),r:4,fill:col,opacity:.82,stroke:'#0d1b2a','stroke-width':1.5});
+    c.addEventListener('pointerenter',ev=>showTip(ev,'<b>Marine platform</b>'+
+      row('Position',Math.abs(p.lat).toFixed(1)+'°'+(p.lat<0?'S':'N')+' '+(p.lon<=180?p.lon.toFixed(1)+'°E':(360-p.lon).toFixed(1)+'°W'))+
+      row('Model departure',p.rms.toFixed(2)+' hPa RMS')));
+    c.addEventListener('pointerleave',hideTip);s.appendChild(c);});
+}
+
+/* ============ PNG ELEVATION ============ */
+{
+  const g=D.pngGauges.filter(x=>x.elev!=null).sort((a,b)=>b.elev-a.elev);
+  document.getElementById('pngHigh').textContent=D.gaugeSummary['Papua New Guinea'].maxElev.toFixed(1);
+  document.getElementById('pngHigh2').textContent=D.gaugeSummary['Papua New Guinea'].maxElev.toFixed(0);
+  document.getElementById('pngActive').textContent=D.gaugeSummary['Papua New Guinea'].active;
+  document.getElementById('pngEver').textContent=D.gaugeSummary['Papua New Guinea'].ever;
+  const W=900,rowH=16,H=g.length*rowH+50,M={t:12,r:20,b:32,l:200};
+  const s=svg('c-elev',W,H);
+  const x1=3000,sx=v=>M.l+v/x1*(W-M.l-M.r);
+  s.appendChild(el('rect',{x:sx(1500),y:M.t,width:sx(2800)-sx(1500),height:H-M.t-M.b,
+    fill:'rgba(230,103,103,.14)',stroke:C.bad,'stroke-width':1,'stroke-dasharray':'3 3'}));
+  const zl=el('text',{x:sx(2150),y:M.t+14,'text-anchor':'middle',fill:C.bad,'font-size':11.5,'font-weight':600});
+  zl.textContent='where the 2015 drought bit';s.appendChild(zl);
+  [0,1000,2000,3000].forEach(v=>{const x=sx(v);
+    s.appendChild(el('line',{x1:x,x2:x,y1:M.t,y2:H-M.b,class:'gl'}));
+    const t=el('text',{x,y:H-M.b+18,'text-anchor':'middle',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    t.textContent=v+' m';s.appendChild(t);});
+  {const sl=el('text',{x:sx(0)+6,y:H-M.b+18,'text-anchor':'start',fill:C.s1,'font-size':10.5});
+   sl.textContent='sea level';s.appendChild(sl);}
+  g.forEach((q,i)=>{
+    const y=M.t+i*rowH+rowH/2,act=q.last>=2021;
+    s.appendChild(el('line',{x1:M.l,x2:Math.max(M.l+1,sx(q.elev)),y1:y,y2:y,stroke:C.grid,'stroke-width':1}));
+    const lb=el('text',{x:M.l-10,y:y+4,'text-anchor':'end',fill:act?C.ink2:C.ink3,'font-size':11});
+    lb.textContent=q.name.slice(0,26);s.appendChild(lb);
+    const c=el('circle',{cx:sx(q.elev),cy:y,r:4.6,fill:act?C.s1:C.ink3,stroke:'#0d1b2a','stroke-width':2});
+    c.addEventListener('pointerenter',ev=>showTip(ev,`<b>${q.name}</b>`+row('Elevation',q.elev.toFixed(1)+' m')+
+      row('Record',q.first+'–'+q.last)+row('Status',act?'still reporting':'stopped')));
+    c.addEventListener('pointerleave',hideTip);s.appendChild(c);});
+  document.getElementById('t-elev').innerHTML=
+    '<table><thead><tr><th>Gauge</th><th>Elevation (m)</th><th>Record</th><th>Status</th></tr></thead><tbody>'+
+    g.map(q=>`<tr><td>${q.name}</td><td>${q.elev.toFixed(1)}</td><td>${q.first}–${q.last}</td><td>${q.last>=2021?'reporting':'stopped'}</td></tr>`).join('')+
+    '</tbody></table>';
+}
+
+/* ============ PNG SURFACE STATIONS: REGISTERED vs REPORTING ============
+   The register says 14. Ten of them sent nothing in July 2026. Bars are the
+   share of expected observations actually received, so a silent station is a
+   visible empty row rather than an absent one - which is the whole point. */
+{
+  const png=D.wdqmsLand['Papua New Guinea'];
+  if(png&&png.stations&&png.stations.length){
+    // silent first, then ascending completeness: the empty rows read as a block
+    const st=[...png.stations].map(x=>({...x,pct:x.exp>0?100*x.rec/x.exp:null}))
+      .sort((a,b)=>(a.pct??-1)-(b.pct??-1));
+    const HIGHLAND=/GOROKA|MENDI/i;
+    const W=900,rowH=18,M={t:14,r:56,b:34,l:190},H=st.length*rowH+M.t+M.b;
+    const s=svg('c-pngland',W,H);
+    const sx=v=>M.l+v/100*(W-M.l-M.r);
+    [0,25,50,75,100].forEach(v=>{const x=sx(v);
+      s.appendChild(el('line',{x1:x,x2:x,y1:M.t,y2:H-M.b,class:'gl'}));
+      const t=el('text',{x,y:H-M.b+18,'text-anchor':'middle',fill:C.ink3,
+        'font-size':11,'font-family':'ui-monospace,monospace'});
+      t.textContent=v+'%';s.appendChild(t);});
+    st.forEach((q,i)=>{
+      const y=M.t+i*rowH, h=rowH-6, pct=q.pct??0;
+      const col=q.status==='black'||pct<1?C.bad:pct>=80?C.s3:C.warn;
+      const hl=HIGHLAND.test(q.name);
+      // a zero-width bar is invisible, so a silent station gets a stub + a rule
+      s.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:y+h/2,y2:y+h/2,
+        stroke:C.grid,'stroke-width':1}));
+      s.appendChild(el('rect',{x:M.l,y,width:Math.max(2.5,sx(pct)-M.l),height:h,rx:2,
+        fill:col,opacity:pct<1?1:.85}));
+      const lb=el('text',{x:M.l-10,y:y+h/2+4,'text-anchor':'end',
+        fill:hl?C.bad:C.ink2,'font-size':11,'font-weight':hl?600:400});
+      lb.textContent=q.name.replace(/ W\.O\.$/,'').slice(0,24);s.appendChild(lb);
+      const vt=el('text',{x:W-M.r+8,y:y+h/2+4,'text-anchor':'start',
+        fill:pct<1?C.bad:C.ink3,'font-size':10.5,'font-family':'ui-monospace,monospace'});
+      vt.textContent=pct<1?'none':Math.round(pct)+'%';s.appendChild(vt);
+      const hit=el('rect',{x:0,y,width:W,height:h,fill:'transparent'});
+      hit.addEventListener('pointerenter',ev=>showTip(ev,`<b>${q.name}</b>`+
+        row('Received',fmt(q.rec))+row('Expected',fmt(q.exp))+
+        row('WDQMS status',q.status)+(hl?row('Note','highlands province'):'')));
+      hit.addEventListener('pointerleave',hideTip);s.appendChild(hit);});
+    document.getElementById('t-pngland').innerHTML=
+      '<table><thead><tr><th>Station</th><th>Received</th><th>Expected</th><th>Status</th></tr></thead><tbody>'+
+      st.map(q=>`<tr><td>${q.name}</td><td>${fmt(q.rec)}</td><td>${fmt(q.exp)}</td><td>${q.status}</td></tr>`).join('')+
+      '</tbody></table>';
+  }
+}
+
+/* ============ DISPERSION ============ */
+{
+  const rows=Object.entries(D.dispersion).filter(([c,v])=>v.span!=null&&v.active>0)
+    .map(([c,v])=>({c,...v}));
+  const W=900,H=300,M={t:14,r:20,b:42,l:52};const s=svg('c-disp',W,H);
+  const x1=Math.max(...rows.map(r=>r.span))*1.08,y1=Math.max(...rows.map(r=>r.active))*1.15;
+  const sx=v=>M.l+v/x1*(W-M.l-M.r),sy=v=>H-M.b-v/y1*(H-M.t-M.b);
+  ticks(0,y1,5).forEach(t=>{const y=sy(t);
+    s.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:y,y2:y,class:'gl'}));
+    const tx=el('text',{x:M.l-8,y:y+4,'text-anchor':'end',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    tx.textContent=t;s.appendChild(tx);});
+  ticks(0,x1,5).forEach(t=>{const x=sx(t);
+    const tx=el('text',{x,y:H-M.b+18,'text-anchor':'middle',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    tx.textContent=fmt(t);s.appendChild(tx);});
+  const xl=el('text',{x:W/2,y:H-6,'text-anchor':'middle',fill:C.ink3,'font-size':11.5});
+  xl.textContent='Greatest distance between two reporting gauges (km)';s.appendChild(xl);
+  const yl=el('text',{x:M.l-4,y:9,'text-anchor':'start',fill:C.ink3,'font-size':10.5});
+  yl.textContent='gauges reporting';s.appendChild(yl);
+  rows.forEach(r=>{
+    const c=el('circle',{cx:sx(r.span),cy:sy(r.active),r:Math.max(4,Math.sqrt(r.active)*2.1),
+      fill:r.c==='Papua New Guinea'?C.s2:C.s1,opacity:.82,stroke:'#0d1b2a','stroke-width':2});
+    c.addEventListener('pointerenter',ev=>showTip(ev,`<b>${r.c}</b>`+row('Reporting gauges',r.active)+
+      row('Furthest pair',fmt(r.span)+' km')));
+    c.addEventListener('pointerleave',hideTip);s.appendChild(c);
+    if(r.active>=5||r.c==='Kiribati'||r.c==='Papua New Guinea'){
+      const t=el('text',{x:sx(r.span),y:sy(r.active)-Math.max(4,Math.sqrt(r.active)*2.1)-6,
+        'text-anchor':'middle',fill:C.ink2,'font-size':11,class:'dlab'});
+      t.textContent=r.c;s.appendChild(t);}});
+  const t=document.getElementById('t-disp');
+  t.innerHTML='<table><thead><tr><th>Country</th><th>Reporting gauges</th><th>Furthest pair (km)</th></tr></thead><tbody>'+
+    rows.sort((a,b)=>b.span-a.span).map(r=>`<tr><td>${r.c}</td><td>${r.active}</td><td>${fmt(r.span)}</td></tr>`).join('')+'</tbody></table>';
+}
+
+/* ============ GBON ============ */
+{
+  const GB=1e6/250000;
+  const rows=Object.entries(D.latestStations).map(([c,n])=>{
+    const a=D.area[c];if(!a)return null;
+    return {c,n,eez:a.eez,per:n/(a.eez/1e6)};}).filter(Boolean);
+  const W=900,H=300,M={t:16,r:24,b:44,l:54};const s=svg('c-gbon',W,H);
+  const x1=Math.max(...rows.map(r=>r.eez))*1.08,y1=Math.max(...rows.map(r=>r.per),GB)*1.15;
+  const sx=v=>M.l+v/x1*(W-M.l-M.r),sy=v=>H-M.b-v/y1*(H-M.t-M.b);
+  ticks(0,y1,5).forEach(t=>{const y=sy(t);
+    s.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:y,y2:y,class:'gl'}));
+    const tx=el('text',{x:M.l-8,y:y+4,'text-anchor':'end',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    tx.textContent=t;s.appendChild(tx);});
+  [0,1e6,2e6,3e6,4e6,5e6].forEach(v=>{if(v>x1)return;const x=sx(v);
+    const tx=el('text',{x,y:H-M.b+18,'text-anchor':'middle',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    tx.textContent=(v/1e6)+'M';s.appendChild(tx);});
+  const xl=el('text',{x:W/2,y:H-8,'text-anchor':'middle',fill:C.ink3,'font-size':11.5});
+  xl.textContent='Exclusive economic zone (km²)';s.appendChild(xl);
+  const yl=el('text',{x:M.l-4,y:9,'text-anchor':'start',fill:C.ink3,'font-size':10.5});
+  yl.textContent='stations per million km² of EEZ';s.appendChild(yl);
+  s.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:sy(GB),y2:sy(GB),stroke:C.warn,'stroke-width':1.5,'stroke-dasharray':'6 4'}));
+  const gl=el('text',{x:W-M.r-4,y:sy(GB)-8,'text-anchor':'end',fill:C.warn,'font-size':11.5,'font-weight':600});
+  gl.textContent='GBON standard for small island states — 4 per million km²';s.appendChild(gl);
+  rows.forEach(r=>{
+    const c=el('circle',{cx:sx(r.eez),cy:sy(r.per),r:5.2,
+      fill:r.per>=GB?C.s3:C.s2,opacity:.85,stroke:'#0d1b2a','stroke-width':2});
+    c.addEventListener('pointerenter',ev=>showTip(ev,`<b>${r.c}</b>`+row('Stations',r.n)+
+      row('EEZ',fmt(r.eez)+' km²')+row('Per million km²',r.per.toFixed(1))+
+      row('Vs standard',(r.per/GB).toFixed(2)+'×')));
+    c.addEventListener('pointerleave',hideTip);s.appendChild(c);});
+  // Labels used to be pinned 10px above every dot, which turned the crowded
+  // bottom-left into unreadable overlap ("Naiuriu(0)"). Place them instead, and
+  // keep clear of the dashed standard line and its caption.
+  placeLabels(s,rows.map(r=>({x:sx(r.eez),y:sy(r.per),r:5.2,
+    text:r.c.length>18?r.c.slice(0,16)+'… ('+r.n+')':r.c+' ('+r.n+')'})),
+    {W,H,M,size:10.5,avoid:[
+      {x0:M.l,y0:sy(GB)-6,x1:W-M.r,y1:sy(GB)+6},                 // the dashed line
+      {x0:W-M.r-330,y0:sy(GB)-22,x1:W-M.r,y1:sy(GB)-4}]});       // its caption
+  document.getElementById('t-gbon').innerHTML=
+    '<table><thead><tr><th>Country</th><th>Stations</th><th>EEZ (km²)</th><th>Per million km²</th><th>× standard</th></tr></thead><tbody>'+
+    rows.slice().sort((a,b)=>a.per-b.per).map(r=>`<tr><td>${r.c}</td><td>${r.n}</td><td>${fmt(r.eez)}</td><td>${r.per.toFixed(1)}</td><td>${(r.per/GB).toFixed(2)}</td></tr>`).join('')+
+    '</tbody></table>';
+}
+
+/* ============ SONDES ============ */
+{
+  const pts=D.sondeYears;
+  const peak=pts.reduce((a,b)=>b[1]>a[1]?b:a);
+  document.getElementById('sondePeak').textContent=peak[1];
+  document.getElementById('sondeNow').textContent=pts[pts.length-1][1];
+  lineChart('c-sonde',[{name:'Sites with soundings',pts,color:C.s3,area:true,w:2.4}],
+    {h:260,ylab:'sites',dp:0,unit:' sites',
+     marks:[{x:2015,label:"PNG's last sounding, 2015",color:C.bad},
+            {x:peak[0],label:'peak '+peak[1]+' in '+peak[0],color:C.ink3}]});
+  const nv=D.sondeNever;
+  document.getElementById('neverList').textContent=
+    nv.slice(0,-1).join(', ')+' and '+nv[nv.length-1];
+}
+
+/* ============ WDQMS divergence ============ */
+{
+  const L=D.wdqmsLand,U=D.wdqmsUpper;
+  const png=L['Papua New Guinea'],pu=U['Papua New Guinea'];
+  if(png){document.getElementById('pngSurfPct').textContent=png.pct+'%';
+    document.getElementById('pngSilent').textContent=png.silent;
+    document.getElementById('pngReg').textContent=png.reg;
+    document.getElementById('pngRep').textContent=png.rep;}
+  if(pu){document.getElementById('pngUpper').textContent=pu.rec;
+    document.getElementById('pngUpperExp').textContent=pu.exp;}
+  const rows=Object.keys(U).filter(c=>L[c]&&U[c].pct!=null&&L[c].pct!=null)
+    .map(c=>({c,surf:L[c].pct,air:U[c].pct}));
+  const W=900,H=310,M={t:16,r:24,b:44,l:54};const s=svg('c-diverge',W,H);
+  const sx=v=>M.l+v/100*(W-M.l-M.r),sy=v=>H-M.b-v/100*(H-M.t-M.b);
+  [0,25,50,75,100].forEach(v=>{
+    s.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:sy(v),y2:sy(v),class:'gl'}));
+    const t1=el('text',{x:M.l-8,y:sy(v)+4,'text-anchor':'end',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    t1.textContent=v+'%';s.appendChild(t1);
+    const t2=el('text',{x:sx(v),y:H-M.b+18,'text-anchor':'middle',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    t2.textContent=v+'%';s.appendChild(t2);});
+  s.appendChild(el('line',{x1:sx(0),y1:sy(0),x2:sx(100),y2:sy(100),stroke:C.ink3,
+    'stroke-width':1,'stroke-dasharray':'5 4',opacity:.6}));
+  const dl=el('text',{x:sx(46),y:sy(50),fill:C.ink3,'font-size':11,transform:`rotate(-35 ${sx(46)} ${sy(50)})`});
+  dl.textContent='both layers equal';s.appendChild(dl);
+  const xl=el('text',{x:W/2,y:H-8,'text-anchor':'middle',fill:C.ink3,'font-size':11.5});
+  xl.textContent='Surface observations received / expected';s.appendChild(xl);
+  const yl=el('text',{x:M.l-4,y:9,'text-anchor':'start',fill:C.ink3,'font-size':10.5});
+  yl.textContent='soundings received / expected';s.appendChild(yl);
+  rows.forEach(r=>{
+    const c=el('circle',{cx:sx(r.surf),cy:sy(r.air),r:6,fill:C.s1,opacity:.85,stroke:'#0d1b2a','stroke-width':2});
+    c.addEventListener('pointerenter',ev=>showTip(ev,`<b>${r.c}</b>`+
+      row('Surface',r.surf+'% received')+row('Upper air',r.air+'% received')+
+      row('Surface stations',L[r.c].reg+' registered, '+L[r.c].silent+' silent')));
+    c.addEventListener('pointerleave',hideTip);s.appendChild(c);
+    const t=el('text',{x:sx(r.surf),y:sy(r.air)-11,'text-anchor':'middle',fill:C.ink2,'font-size':10.5,class:'dlab'});
+    t.textContent=r.c;s.appendChild(t);});
+  const t=document.getElementById('t-diverge');
+  t.innerHTML='<table><thead><tr><th>Country</th><th>Surface %</th><th>Upper air %</th><th>Surface registered</th><th>Silent</th></tr></thead><tbody>'+
+    rows.sort((a,b)=>a.surf-b.surf).map(r=>`<tr><td>${r.c}</td><td>${r.surf}</td><td>${r.air}</td><td>${L[r.c].reg}</td><td>${L[r.c].silent}</td></tr>`).join('')+'</tbody></table>';
+}
+
+/* ============ WATCHING ============
+   Earlier version tagged every row "sea level measured" - true of 17 of the 18
+   countries, so it printed the same words 17 times and encoded nothing. Since
+   the sea level record is near-universal here, restrict the chart to those
+   countries, say so once in the subtitle, and let the bar carry the one
+   variable that actually differs: how many weather stations report. */
+{
+  const sl=new Set(D.seaLevelCountries);
+  const rows=Object.entries(D.latestStations)
+    .filter(([c])=>sl.has(c))
+    .map(([c,n])=>({c,n}))
+    .sort((a,b)=>a.n-b.n||a.c.localeCompare(b.c));
+  const W=900,rowH=18,M={t:8,r:78,b:46,l:196},H=rows.length*rowH+M.t+M.b;
+  const s=svg('c-watch',W,H);
+  const max=Math.max(...rows.map(r=>r.n),1);
+  const sx=v=>M.l+v/max*(W-M.l-M.r);
+  ticks(0,max,4).forEach(t=>{const x=sx(t);
+    s.appendChild(el('line',{x1:x,x2:x,y1:M.t,y2:H-M.b,class:'gl'}));
+    const tx=el('text',{x,y:H-M.b+17,'text-anchor':'middle',fill:C.ink3,'font-size':11,'font-family':'ui-monospace,monospace'});
+    tx.textContent=t;s.appendChild(tx);});
+  // sits below the tick row, not on top of it
+  const xl=el('text',{x:(M.l+W-M.r)/2,y:H-6,'text-anchor':'middle',fill:C.ink3,'font-size':11.5});
+  xl.textContent='Weather stations reporting to the international network';s.appendChild(xl);
+  rows.forEach((r,i)=>{
+    const y=M.t+i*rowH+rowH/2, none=r.n===0;
+    const lb=el('text',{x:M.l-10,y:y+4,'text-anchor':'end',
+      fill:none?C.bad:C.ink2,'font-size':11.5,'font-weight':none?600:400});
+    lb.textContent=r.c;s.appendChild(lb);
+    s.appendChild(el('rect',{x:M.l,y:y-5.5,width:Math.max(2.5,sx(r.n)-M.l),height:11,rx:3,
+      fill:none?C.bad:C.s1,opacity:none?1:.85}));
+    const vt=el('text',{x:(none?M.l+8:sx(r.n)+8),y:y+4,fill:none?C.bad:C.ink3,
+      'font-size':11,'font-weight':none?600:400,
+      'font-family':none?'inherit':'ui-monospace,monospace'});
+    vt.textContent=none?'no weather station':r.n;s.appendChild(vt);
+    const hit=el('rect',{x:0,y:y-9,width:W,height:18,fill:'transparent'});
+    hit.addEventListener('pointerenter',ev=>showTip(ev,`<b>${r.c}</b>`+
+      row('Weather stations',r.n)+row('Sea level record','yes')));
+    hit.addEventListener('pointerleave',hideTip);s.appendChild(hit);});
+}
+
+/* ============ SCROLLY: three layers ============ */
+{
+  const pk=D.sondeYears.reduce((a,b)=>b[1]>a[1]?b:a);
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  set('d-peak',pk[1]); set('d-now',D.sondeYears[D.sondeYears.length-1][1]);
+  set('d-mar',D.marine.pacific); set('d-marpct',D.marine.pctWithin1Pac+'%');
+  set('d-marglb',D.marine.pctWithin1Glb+'%');
+  set('d-elev',D.gaugeSummary['Papua New Guinea'].maxElev.toFixed(1));
+
+  const bands={air:document.querySelector('#diag [data-band=air]'),
+               sea:document.querySelector('#diag [data-band=sea]'),
+               gnd:document.querySelector('#diag [data-band=gnd]')};
+  const steps=[...document.querySelectorAll('.scrolly-steps .step')];
+  function light(key){
+    steps.forEach(s=>s.classList.toggle('on',s.dataset.layer===key));
+    for(const k in bands){if(!bands[k])continue;
+      bands[k].classList.toggle('lit',k===key);
+      bands[k].classList.toggle('dim',k!==key);}
+  }
+  const so=window.__layerIO=new IntersectionObserver(es=>{
+    let best=null;
+    es.forEach(e=>{if(e.isIntersecting&&(!best||e.intersectionRatio>best.intersectionRatio))best=e;});
+    if(best)light(best.target.dataset.layer);
+  },{rootMargin:'-62% 0px -14% 0px',threshold:[0,.2,.6,1]});
+  steps.forEach(s=>so.observe(s));
+  light('air');
+}
+
+/* ============ FIXED STAGE: SCROLL CROSS-FADES SLIDES IN PLACE ============ */
+{
+  const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  /* ---- 1. split each section into one-figure panels ---- */
+  document.querySelectorAll('main > section').forEach(sec=>{
+    if(sec.classList.contains('scrolly'))return;
+    const kids=[...sec.children]; const groups=[]; let g=[];
+    kids.forEach(k=>{
+      if(k.tagName==='FIGURE'){
+        // a substantial intro gets its own slide rather than being scaled down
+        // to share one with the chart
+        if(g.length>=3||g.some(n=>n.tagName==='H1')){groups.push(g);g=[];}
+        g.push(k); groups.push(g); g=[];
+      }else g.push(k);
+    });
+    if(g.length)groups.push(g);
+    groups.forEach(grp=>{
+      const panel=document.createElement('div'); panel.className='panel';
+      const inner=document.createElement('div'); inner.className='panel-inner';
+      sec.insertBefore(panel,grp[0]); panel.appendChild(inner);
+      grp.forEach(n=>inner.appendChild(n));
+    });
+  });
+
+  /* ---- 2. the pinned-layers section becomes three ordinary slides ----
+     Each carries its own copy of the diagram with a different band lit. The
+     copies are pixel-identical and sit in the same place, so cross-fading
+     between them reads as the highlight moving, not as two diagrams. */
+  const scrolly=document.querySelector('section.scrolly');
+  if(scrolly){
+    const diag=scrolly.querySelector('#diag');
+    const steps=[...scrolly.querySelectorAll('.scrolly-steps .step')];
+    const intro=scrolly.querySelector('.scrolly-inner');
+
+    // The section's own heading sits outside .scrolly-inner, so it was being
+    // dropped when the sections are removed in step 3 - the framework arrived
+    // with no title. Give it a panel of its own, first, before the layers.
+    {
+      const head=[...scrolly.children].filter(n=>n!==intro&&!n.classList.contains('panel'));
+      if(head.length){
+        const panel=document.createElement('div'); panel.className='panel';
+        const inner=document.createElement('div'); inner.className='panel-inner';
+        head.forEach(n=>inner.appendChild(n));
+        panel.appendChild(inner); scrolly.appendChild(panel);
+      }
+    }
+
+    steps.forEach(step=>{
+      const key=step.dataset.layer;
+      const panel=document.createElement('div'); panel.className='panel';
+      const inner=document.createElement('div'); inner.className='panel-inner';
+      const d=diag.cloneNode(true); d.removeAttribute('id');
+      d.querySelectorAll('[data-band]').forEach(b=>{
+        // the source diagram is still carrying whatever the pinned-column
+        // observer last set, so clear before setting or clones end up "lit dim"
+        b.classList.remove('lit','dim');
+        b.classList.add(b.dataset.band===key?'lit':'dim');});
+      const wrap=document.createElement('div');
+      wrap.style.cssText='max-width:470px;margin:0 auto 1.2rem';
+      wrap.appendChild(d);
+      inner.appendChild(wrap); inner.appendChild(step);
+      step.classList.add('on');           // text is always lit on its own slide
+      step.style.minHeight='0'; step.style.padding='0';
+      panel.appendChild(inner); scrolly.appendChild(panel);
+    });
+    if(intro)intro.remove();
+    // the pinned-column observer owned `.on` and now has nothing to pin
+    if(window.__layerIO)window.__layerIO.disconnect();
+    scrolly.classList.remove('scrolly');
+  }
+
+  /* ---- 3. move every panel onto one sticky stage ---- */
+  const main=document.querySelector('main');
+  const inners=[...document.querySelectorAll('.panel-inner')];
+  const stack=document.createElement('div'); stack.className='stack';
+  const stage=document.createElement('div'); stage.className='stage';
+  stack.appendChild(stage);
+  main.insertBefore(stack,main.firstChild);
+
+  // remember which nav target each slide belongs to, before the sections empty
+  const anchorOf=inners.map(el=>{const s=el.closest('section');return s?s.id:null;});
+
+  const slides=inners.map((inner,i)=>{
+    const slide=document.createElement('div'); slide.className='slide';
+    const box=document.createElement('div'); box.className='slide-in';
+    box.appendChild(inner); slide.appendChild(box); stage.appendChild(slide);
+    slide.dataset.i=i;
+    return slide;
+  });
+  document.querySelectorAll('main > section').forEach(s=>s.remove());
+  const footer=document.querySelector('footer');
+  if(footer)main.appendChild(footer);
+
+  const N=slides.length;
+  const HOLD=1;                       // viewport-heights of scroll per slide
+  // (N-1) hand-offs of scroll, PLUS one viewport for the stage itself to
+  // occupy. Without the trailing 100svh the sticky stage releases a full
+  // viewport before the last slide's turn, so the closing lines scrolled off
+  // the top of the screen and were never seen.
+  function sizeStack(){stack.style.height=((N-1)*HOLD*100+100)+'svh';}
+  sizeStack();
+
+  /* ---- fit each slide to the stage ----
+     Charts are SVG, so scaling is lossless and keeps a slide on one screen
+     instead of handing it an internal scrollbar, which would fight the page
+     scroll that is driving the whole sequence. */
+  const MIN_FIT=0.62, PAD=6;
+  let fitting=false;
+  function fit(){
+    if(fitting)return; fitting=true;
+    slides.forEach(s=>{
+      const box=s.querySelector('.slide-in'), inner=box.firstElementChild;
+      inner.style.transformOrigin='top center';
+      // keep the box a scroll container while measuring: with overflow visible
+      // its max-height stops clamping and it reports a height LARGER than the
+      // stage, which made the algorithm think everything already fitted
+      inner.style.transform=''; inner.dataset.k='1'; box.style.overflowY='hidden';
+      // Measure PAINTED rectangles, not scrollHeight: scrollHeight leaves out the
+      // last child's bottom margin, which was silently clipping ~24px on phones.
+      // drive the loop off the ACTUAL clipped amount rather than a height ratio,
+      // so it converges regardless of margins, origins or scroll offsets
+      let k=1;
+      for(let pass=0;pass<7;pass++){
+        const br=box.getBoundingClientRect(), ir=inner.getBoundingClientRect();
+        const clip=ir.bottom-(br.bottom-PAD);
+        if(clip<=0.5)break;
+        k=Math.max(MIN_FIT,k*Math.max(0.5,(ir.height-clip)/ir.height));
+        inner.style.transform='scale('+k.toFixed(4)+')';
+        if(k<=MIN_FIT)break;
+      }
+      inner.dataset.k=k.toFixed(4);
+      const br=box.getBoundingClientRect(), ir=inner.getBoundingClientRect();
+      // only fall back to an internal scrollbar if even MIN_FIT cannot fit it
+      box.style.overflowY=(ir.bottom>br.bottom+1)?'auto':'hidden';
+    });
+    fitting=false;
+  }
+  // charts, fonts and the mobile label rules can change a slide's height after
+  // first paint, so refit whenever a slide or its content actually resizes
+  let fitTimer=null;
+  const ro=new ResizeObserver(()=>{clearTimeout(fitTimer);
+    fitTimer=setTimeout(()=>{fit();schedule&&schedule();},60);});
+  slides.forEach(s=>{
+    const box=s.querySelector('.slide-in');
+    ro.observe(box); ro.observe(box.firstElementChild);
+  });
+  [120,400,1200].forEach(t=>setTimeout(()=>{fit();schedule&&schedule();},t));
+
+  /* ---- 4. first-view chart animation ---- */
+  const drawn=new Set();
+  function animate(node){
+    if(reduce)return;
+    node.querySelectorAll('svg path[stroke]').forEach(p=>{
+      const f=p.getAttribute('fill'); if(f&&f!=='none')return;
+      let L=0; try{L=p.getTotalLength()}catch(e){return}
+      if(!L||L>60000)return;
+      p.style.strokeDasharray=L; p.style.strokeDashoffset=L; p.getBoundingClientRect();
+      p.style.transition='stroke-dashoffset 1.05s cubic-bezier(.25,.8,.3,1)';
+      p.style.strokeDashoffset=0;
+      setTimeout(()=>{p.style.strokeDasharray='';p.style.transition='';},1300);
+    });
+    // The layer schematic is not a data chart: cascading it adds flicker, and
+    // restoring each mark to its inline `opacity` attribute pinned the lit
+    // band's wash at the dimmed value and defeated the highlight.
+    const marks=[...node.querySelectorAll('svg circle, svg rect[rx]')]
+      .filter(m=>m.getAttribute('opacity')!=='0' && !m.closest('.diag'));
+    const per=marks.length?Math.min(12,320/marks.length):0;
+    marks.forEach((m,i)=>{
+      const o=m.style.opacity||m.getAttribute('opacity')||1;
+      m.style.opacity=0;
+      setTimeout(()=>{m.style.transition='opacity .42s';m.style.opacity=o;},60+i*per);
+    });
+  }
+
+  /* ---- 5. scroll drives the cross-fade; nothing translates with the page ---- */
+  const ENTER=54;                     // px a slide travels through the hand-off
+  const bar=document.getElementById('bar');
+  const links=[...document.querySelectorAll('nav a')];
+  let raf=null, active=-1;
+  var schedule;
+  function paint(){
+    raf=null;
+    const vh=innerHeight;
+    const prog=Math.max(0,Math.min(N-1,(scrollY-stack.offsetTop)/(vh*HOLD)));
+    slides.forEach((s,i)=>{
+      const d=prog-i;                       // 0 while this slide is the current one
+      const a=Math.min(1,Math.abs(d));
+      if(a>=0.999){                          // fully gone - drop it out of the way
+        s.style.opacity='0'; s.style.visibility='hidden'; s.style.pointerEvents='none';
+        return;
+      }
+      s.style.visibility='visible';
+      // steep curve so the outgoing slide has mostly cleared before the incoming
+      // one arrives - a shallow curve leaves both at ~50% and they read as one
+      // muddled overlay through the whole hand-off
+      s.style.opacity=Math.pow(1-a,2.4).toFixed(3);
+      // Direction cue. A symmetric scale (both neighbours shrinking) gives the eye
+      // nothing to tell it which way it is travelling, and reads as reversing. So:
+      //   arriving from below -> starts smaller and grows into place (approaching)
+      //   leaving upward      -> grows slightly as it passes out of frame
+      // with a bigger drift, that makes forward motion unmistakable.
+      const sc = d>0 ? 1+0.05*a : 1-0.07*a;
+      s.style.transform='translateY('+(-d*ENTER).toFixed(1)+'px) scale('+sc.toFixed(4)+')';
+      s.style.pointerEvents=a<0.42?'auto':'none';
+    });
+    const cur=Math.round(prog);
+    if(cur!==active){
+      active=cur;
+      const el=slides[cur];
+      if(el&&!drawn.has(cur)){drawn.add(cur);animate(el);}
+      const id=anchorOf[cur];
+      links.forEach(l=>l.classList.toggle('on',l.getAttribute('href')==='#'+id));
+    }
+    if(bar)bar.style.width=(prog/(N-1)*100)+'%';
+  }
+  schedule=function(){if(!raf)raf=requestAnimationFrame(paint);};
+
+  // nav jumps to a slide's scroll position rather than to a (now removed) section
+  links.forEach(l=>{
+    const id=l.getAttribute('href').slice(1);
+    const idx=anchorOf.indexOf(id);
+    l.addEventListener('click',ev=>{
+      if(idx<0)return; ev.preventDefault();
+      scrollTo({top:stack.offsetTop+idx*innerHeight*HOLD,behavior:'smooth'});
+    });
+  });
+
+  if(reduce){
+    stack.style.height='auto';
+    slides.forEach((s,i)=>{s.style.opacity='';s.style.transform='';s.style.visibility='';
+      s.style.pointerEvents='auto';animate(s);});
+  }else{
+    addEventListener('scroll',schedule,{passive:true});
+    addEventListener('resize',()=>{sizeStack();schedule();},{passive:true});
+    document.querySelectorAll('figure').forEach(f=>{
+      f.addEventListener('pointerenter',()=>{const s=f.closest('.slide');
+        if(s){s.style.opacity='1';s.style.transform='none';}});
+      f.addEventListener('pointerleave',schedule);
+    });
+    paint(); requestAnimationFrame(paint);
+    requestAnimationFrame(()=>{fit();paint();});
+    addEventListener('load',()=>{fit();paint();});
+  }
+  // a table opening changes a slide's height, so refit
+  document.addEventListener('click',e=>{
+    if(e.target.matches('[data-table]'))setTimeout(()=>{fit();schedule();},30);});
+  addEventListener('resize',()=>{sizeStack();fit();schedule();},{passive:true});
+}
+
+/* ============ TABLE TOGGLES + NAV ============ */
+document.querySelectorAll('[data-table]').forEach(b=>{
+  b.setAttribute('aria-expanded','false');
+  b.onclick=()=>{const t=document.getElementById(b.dataset.table);
+    const on=t.classList.toggle('on');b.setAttribute('aria-expanded',on);
+    b.textContent=on?'Hide table':'Table';};});
+
+
+</script>
+</body>
+</html>
